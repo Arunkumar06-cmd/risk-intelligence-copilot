@@ -14,8 +14,7 @@ commit_message = "chore(release): v{version} [skip ci]"
 commit_author = "semantic-release <semantic-release@python-semantic-release.com>"
 
 [tool.semantic_release.changelog]
-template_dir = "templates"
-exclude_commit_patterns = ["docs/*", ".github/*", "*.pptx", "*.png"]
+exclude_commit_patterns = ["^docs/", "^\\.github/", "\\.pptx$", "\\.png$"]
 
 [tool.ruff]
 target-version = "py311"
