@@ -1,0 +1,36 @@
+name: 🐞 Bug report
+description: Tell us what broke, with proof
+title: "fix: [short bug name]"
+labels: [bug]
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: Broken area
+      options: [Login/Auth, Ask + SAR draft, Transactions view, Snowflake SQL, Vector search, Export, Other]
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What broke?
+      description: Exact steps (1, 2, 3) + what you saw vs what you wanted
+      placeholder: "1. Logged in as analyst 2. Asked ... 3. Got error ..."
+    validations:
+      required: true
+  - type: dropdown
+    id: env
+    attributes:
+      label: Where?
+      options: [Local run, Streamlit Cloud, Snowflake SiS]
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-checks
+      options:
+        - label: No secrets/keys pasted in this report
+          required: true
+        - label: Tests still pass (`pytest tests/ -q`)
+          required: false

@@ -1,0 +1,5 @@
+# Who must review what (auto reviewer map)
+* @Arunkumar06-cmd
+/backend/ @Arunkumar06-cmd
+/sql/ @Arunkumar06-cmd
+/.github/workflows/ @Arunkumar06-cmd

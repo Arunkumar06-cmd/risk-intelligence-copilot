@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: ❓ Quick question
+    url: https://github.com/Arunkumar06-cmd/risk-intelligence-copilot/discussions
+    about: Ask in Discussions, not Issues

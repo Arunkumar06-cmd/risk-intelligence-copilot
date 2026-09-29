@@ -1,0 +1,18 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
+        args: ["--maxkb=2000"]
+      - id: detect-private-key
+      - id: debug-statements
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.9.4
+    hooks:
+      # Breakage-only gate: syntax errors (bad code) + real pyflakes bugs.
+      # Skips style nits (unused imports/vars) so legit demo code never blocks.
+      - id: ruff
+        args: [--select, E9, --select, F, --ignore, F401, --ignore, F841]

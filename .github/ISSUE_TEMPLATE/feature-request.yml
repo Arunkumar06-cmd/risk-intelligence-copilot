@@ -1,0 +1,28 @@
+name: ✨ Feature request
+description: Ask for a new trick
+title: "feat: [short want]"
+labels: [enhancement]
+body:
+  - type: textarea
+    id: want
+    attributes:
+      label: What do you want?
+      description: One user story (who + what + why)
+      placeholder: "As an officer, I want ... so that ..."
+    validations:
+      required: true
+  - type: dropdown
+    id: cost
+    attributes:
+      label: Free-tier safe?
+      description: Must run on Snowflake Trial + free Streamlit
+      options: ["Yes, free", "Needs paid part (name it below)"]
+    validations:
+      required: true
+  - type: textarea
+    id: proof
+    attributes:
+      label: How do we prove it works?
+      description: Test or demo step
+    validations:
+      required: false

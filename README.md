@@ -11,6 +11,31 @@ Ask in plain English → get **verified SQL evidence** + **cited law clauses** +
 
 **Deck:** [`Risk_Intelligence_Copilot_Submission.pptx`](./Risk_Intelligence_Copilot_Submission.pptx)
 **Tests:** 9 guard-rail pytest checks, run green on every push (see CI badge ↑).
+**Guards:** CodeQL + secret scan + pip audit on every push (see Security badge ↑↓ in Actions).
+
+<details>
+<summary><b>🔀 Live data-flow (click to open)</b></summary>
+
+```mermaid
+sequenceDiagram
+    participant U as Analyst
+    participant UI as Streamlit
+    participant R as Intent router
+    participant DB as Snowflake SQL
+    participant V as AI_EMBED search
+    participant LLM as AI_COMPLETE
+    participant O as Officer
+    participant A as AUDIT_LOGS
+    U->>UI: English question
+    UI->>R: classify + guardrails
+    R->>DB: allow-list SQL (bound values)
+    R->>V: TOP-3 law clauses
+    DB-->>LLM: signals (tx rows)
+    V-->>LLM: cites (policy text)
+    LLM-->>O: draft SAR
+    O->>A: approve → APPROVED row
+```
+</details>
 
 ---
 
