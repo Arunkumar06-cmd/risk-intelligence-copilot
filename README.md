@@ -1,51 +1,68 @@
-# Risk, Fraud and Regulatory Intelligence Copilot (Banking/NBFC)
+# 🛡️ Risk, Fraud & Regulatory Intelligence Copilot
+### Banking / NBFC Compliance — Snowflake Cortex AI | CoCo CLI Hackathon, GCC Edition
 
-AI helper (copilot) for bank risk check. Turns plain words (user ask) into safe SQL (DB query) + law cites (policy proof) + SAR draft (suspicious report).
+Ask in plain English → get **verified SQL evidence** + **cited law clauses** + **draft SAR**, with every step logged. No black box. Officer approves before anything is filed.
 
-## Live Demo
-- Streamlit Cloud (free host): add your link after deploy -> `https://YOUR-APP.streamlit.app`
-- Snowflake SiS (in-DB app): see `sql/02_sis_deploy.sql`
+**Repo:** `github.com/Arunkumar06-cmd/risk-intelligence-copilot`
+**Deck:** [`Risk_Intelligence_Copilot_Submission.pptx`](./Risk_Intelligence_Copilot_Submission.pptx)
 
-## What it does
-1. Intent router (ask sorter): SAR draft / policy lookup / tx review / general
-2. Vector search (meaning match): `AI_EMBED` + `VECTOR_COSINE_SIMILARITY` on `REGULATORY_POLICIES`
-3. Report maker: `AI_COMPLETE` (mistral-large3 primary, llama3.1-8b cheap draft) with guardrails (safety)
-4. Human check (HITL): officer must approve before save to `AUDIT_LOGS`
-5. Proof trail: stores evidence IDs + policy IDs + model + hashes (proof print) + QUERY_ID
+---
 
-## Quick Run (local)
+## ⚡ Demo in 5 minutes
+
 ```bash
-cd risk_copilot
-python3 -m venv .venv && source .venv/bin/activate
+# 1. Snowflake — run in Snowsight (web UI), in order:
+sql/01_setup.sql        # tables + row locks + name masking
+sql/03_rate_limit.sql   # spam-stop table + cleanup task
+
+# 2. App — local:
 pip install -r requirements.txt
-cp .streamlit/secrets.toml.example .streamlit/secrets.toml
-# edit secrets.toml with your Snowflake trial keys
+cp .streamlit/secrets.toml.example .streamlit/secrets.toml  # add trial keys
 streamlit run streamlit_app.py
 ```
 
-## Snowflake Setup
-```sql
--- run in order in Snowsight (web UI):
--- sql/01_setup.sql  (grids + locks + masks)
--- sql/03_rate_limit.sql (spam stop grid)
--- sql/02_sis_deploy.sql (only for SiS deploy)
+Login → ask *“draft SAR for high-velocity wires to high-risk countries”* → review SQL + cited clauses → officer approves → download the Markdown report.
+
+## 🧠 How it works
+
+| Step | What happens |
+|---|---|
+| **1. Router** | Keyword intent (SAR / policy / tx review) → allow-list SQL templates with bound params. Blocked words + char allow-list reject injection. |
+| **2. Evidence + Law** | Snowflake SQL pulls transaction signals; `AI_EMBED` + cosine vector search returns TOP-3 regulation clauses. |
+| **3. Report** | `AI_COMPLETE` (mistral-large3, llama3.1-8b drafts, guardrails ON) writes a short SAR draft. |
+| **4. Human check** | Officer MUST approve (role verified in Snowflake). Only then is the APPROVED report written to `AUDIT_LOGS`. |
+
+**Trust built in:** row-access policies + customer-name masking, per-user rate limits, prompt/result hashes, `QUERY_ID` per report, denied-login audit, safe Markdown export (no raw SQL leaks).
+
+## 📁 Repo map
+
+```
+risk_copilot/
+├── streamlit_app.py        # chat UI, metrics, approve flow, transactions
+├── backend/
+│   ├── hybrid_agent.py     # router + vector search + report + audit log
+│   └── config.py           # secrets, models, limits (single source)
+├── sql/
+│   ├── 01_setup.sql        # DB, tables, policies, masks
+│   ├── 02_sis_deploy.sql   # Streamlit-in-Snowflake deploy
+│   └── 03_rate_limit.sql   # rate-limit table + cleanup task
+├── tests/test_guards.py    # 9 guard-rail tests (pytest)
+└── Risk_Intelligence_Copilot_Submission.pptx
 ```
 
-## Tests
+## 🧪 Tests
+
 ```bash
-python3 -m pytest tests/test_guards.py -q
-# 9 passed
+python3 -m pytest tests/test_guards.py -q   # 9 passed
 ```
 
-## Stack (2026, free tier)
-- Snowflake Trial ($400 free) + Cortex AI_EMBED + AI_COMPLETE
-- snowflake-arctic-embed-m-v1.5 + mistral-large3 + llama3.1-8b
-- Streamlit 1.37.1 + Python connector 3.13.0
-- No nemotron. Only free parts.
+## 💰 Cost — ~$0 demo
 
-## Repo Map
-- `streamlit_app.py` : UI (login + ask + approve + export)
-- `backend/hybrid_agent.py` : router + search + report + log
-- `backend/config.py` : secrets (keys) + models
-- `sql/` : setup + SiS + rate limit
-- `tests/` : guard checks
+Snowflake Trial ($400 free credit) + `AI_EMBED` / `AI_COMPLETE` on tiny demo data + Streamlit (Cloud free / SiS included). Heavy models only on short, truncated prompts.
+
+## 🗺️ Beyond the demo
+
+Real-time screening queue → multi-regulator packs (RBI / FinCEN / Basel) → SSO + key-pair auth in prod → scheduled re-embedding of new circulars.
+
+---
+MIT License — see [LICENSE](./LICENSE).
