@@ -4,4 +4,4 @@ snowflake-connector-python==3.13.0
 streamlit==1.37.1
 cryptography==42.0.8
 pandas==2.2.2
-pytest==8.3.2
+pytest==9.1.1
