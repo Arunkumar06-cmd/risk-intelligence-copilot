@@ -59,8 +59,12 @@ def get_sis_user() -> tuple:
                 return name.strip(), True
     except Exception:
         pass
+    # New API first (st.user). Old experimental_user raises on access in new
+    # Streamlit (>=1.45), so only touch it when st.user is missing.
+    if hasattr(st, "user"):
+        return "", False
     try:
-        eu = getattr(st, "experimental_user", None)
+        eu = st.experimental_user  # type: ignore[attr-defined]
         if eu is not None:
             try:
                 n2 = str(eu.get("user_name", "") or "")  # type: ignore

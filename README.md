@@ -1,10 +1,16 @@
 # 🛡️ Risk, Fraud & Regulatory Intelligence Copilot
 ### Banking / NBFC Compliance — Snowflake Cortex AI | CoCo CLI Hackathon, GCC Edition
 
+[![CI](https://github.com/Arunkumar06-cmd/risk-intelligence-copilot/actions/workflows/ci.yml/badge.svg)](https://github.com/Arunkumar06-cmd/risk-intelligence-copilot/actions)
+![License: MIT](https://img.shields.io/github/license/Arunkumar06-cmd/risk-intelligence-copilot)
+![Python 3.11](https://img.shields.io/badge/python-3.11-blue)
+
 Ask in plain English → get **verified SQL evidence** + **cited law clauses** + **draft SAR**, with every step logged. No black box. Officer approves before anything is filed.
 
-**Repo:** `github.com/Arunkumar06-cmd/risk-intelligence-copilot`
+![Login](docs/app_login.png) ![Analyst dashboard](docs/app_dashboard.png)
+
 **Deck:** [`Risk_Intelligence_Copilot_Submission.pptx`](./Risk_Intelligence_Copilot_Submission.pptx)
+**Tests:** 9 guard-rail pytest checks, run green on every push (see CI badge ↑).
 
 ---
 
