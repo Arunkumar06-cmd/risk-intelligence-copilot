@@ -23,6 +23,52 @@ APP_TITLE = "Risk Intel - SAR Helper"
 # Single source. No dup const. Read from agent + config.
 MAX_INPUT_LEN = int(agent.MAX_INPUT_LEN)
 
+# Static CSS only. No user data inside. Keeps XSS fix (web attack) intact:
+# user-derived text is rendered via st.text / st.markdown after clean_markdown
+# (tag strip), never inside unsafe HTML. Badge labels below pass through
+# clean_markdown first, so <...> can never reach the browser as markup.
+_CSS = """
+<style>
+    .block-container { padding-top: 1.5rem !important; padding-bottom: 2rem !important; max-width: 98% !important; }
+    div[data-testid="stVerticalBlockBorderWrapper"] { border: 1px solid rgba(255,255,255,0.08) !important; border-radius: 10px !important; background-color: #0E131F !important; box-shadow: 0 4px 20px rgba(0,0,0,0.25) !important; }
+    div[data-testid="stMetricValue"] { font-size: 1.5rem !important; font-weight: 700 !important; letter-spacing: -0.5px; }
+    .stCodeBlock { border-radius: 8px !important; }
+    .pill { display: inline-block; padding: 3px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 600; border: 1px solid; }
+    .pill-high { background: rgba(239,68,68,0.15); color: #FCA5A5; border-color: rgba(239,68,68,0.35); }
+    .pill-med { background: rgba(245,158,11,0.15); color: #FCD34D; border-color: rgba(245,158,11,0.35); }
+    .pill-low { background: rgba(59,130,246,0.15); color: #93C5FD; border-color: rgba(59,130,246,0.35); }
+    .pill-idle { background: rgba(148,163,184,0.12); color: #CBD5E1; border-color: rgba(148,163,184,0.30); }
+    .pill-ok { background: rgba(34,197,94,0.15); color: #86EFAC; border-color: rgba(34,197,94,0.35); }
+</style>
+"""
+
+# Quick-pill prompts. Static strings only (no user data).
+QUICK_PILLS = [
+    "Draft SAR for high-velocity wires to high-risk countries",
+    "Show policy clauses for suspicious transaction reporting",
+]
+
+
+def _badge(label: str, level: str) -> None:
+    """Static HTML shell + sanitized label. Tag strip stops markup inject."""
+    safe = clean_markdown(label)[:80]
+    cls = {"high": "pill-high", "med": "pill-med", "low": "pill-low", "ok": "pill-ok"}.get(level, "pill-idle")
+    st.markdown(f"<span class='pill {cls}'>{safe}</span>", unsafe_allow_html=True)
+
+
+def _case_signal() -> tuple:
+    """Live case facts from session draft. (level, evidence n, policy n)."""
+    d = st.session_state.get("pending_draft") or {}
+    ev = d.get("evidence_refs", []) or []
+    pol = d.get("policy_ids", []) or []
+    if not d:
+        return ("idle", 0, 0)
+    if len(ev) >= 5:
+        return ("high", len(ev), len(pol))
+    if len(ev) >= 1:
+        return ("med", len(ev), len(pol))
+    return ("low", 0, len(pol))
+
 
 def _evidence_limit() -> int:
     """Read tx limit live from config. No hard 5. Simple English."""
@@ -300,8 +346,134 @@ def build_safe_export(draft: dict, user_name: str = "") -> str:
     return "\n".join(lines)
 
 
+def run_pipeline(q: str, role: str) -> dict:
+    """One real pipeline: intent + signals + law + draft. Raises on error."""
+    intent = agent.classify_intent(q)
+    tx_rows = agent.fetch_transactions("", limit=_evidence_limit(), offset=0)
+    policies = agent.vector_search(q, k=config.TOP_K)
+    draft = agent.build_draft(q, tx_rows, role)
+    draft["intent"] = intent
+    draft["policies"] = policies
+    draft["tx_rows"] = tx_rows
+    st.session_state["pending_draft"] = draft
+    turns = st.session_state.get("turns", [])
+    turns.append({"q": q, "intent": intent,
+                  "ev": len(draft.get("evidence_refs", [])),
+                  "pol": len(draft.get("policy_ids", []))})
+    st.session_state["turns"] = turns[-20:]
+    return draft
+
+
+def render_sidebar(user_name: str, role: str, auth_mode: str) -> None:
+    """Quiet session rail: who, what role, what engine, what budget."""
+    with st.sidebar:
+        st.markdown("### 🛡️ Risk Intel")
+        st.caption("Snowflake Cortex AI • GCC Edition")
+        _badge(f"{role.upper()} • {auth_mode}", "ok" if auth_mode == "sis" else "low")
+        st.caption(f"User: {clean_markdown(user_name)[:60]}")
+        st.divider()
+        st.caption("**Engine**")
+        st.caption(f"LLM: `{config.PRIMARY_MODEL}` (drafts: `{config.DRAFT_MODEL}`)")
+        st.caption(f"Embed: `{config.EMBED_MODEL}` • guardrails ON")
+        st.divider()
+        used_min = len([t for t in st.session_state.get("req_times", []) if time.time() - t < 60])
+        st.caption(f"**Budget:** {used_min}/10 per min • {config.RATE_LIMIT_PER_HOUR}/h global")
+        st.caption("Per-session cap is demo only. Prod: Redis/Snowflake.")
+        if st.button("Logout"):
+            for k in ("auth_ok", "pending_draft", "snowflake_role", "turns", "req_times"):
+                st.session_state.pop(k, None)
+            st.rerun()
+
+
+def render_kpi_strip() -> None:
+    """Top-fold status cards. Live session values only, never faked."""
+    level, ev_n, pol_n = _case_signal()
+    k1, k2, k3, k4 = st.columns(4)
+    with k1:
+        with st.container(border=True):
+            st.caption("CASE RISK (rule: ≥5 signals = HIGH)")
+            if level == "idle":
+                _badge("NO CASE YET", "idle")
+            else:
+                _badge("HIGH VELOCITY" if level == "high" else "REVIEW", level)
+    with k2:
+        with st.container(border=True):
+            st.metric("Evidence items", str(ev_n), "live" if ev_n else "run a query")
+    with k3:
+        with st.container(border=True):
+            st.metric("Cited clauses", str(pol_n), "vector TOP-3" if pol_n else "—")
+    with k4:
+        with st.container(border=True):
+            used = len([t for t in st.session_state.get("req_times", []) if time.time() - t < 60])
+            st.metric("Queries this min", f"{used}/10", "session pace")
+
+
+def render_inspector(role: str, user_name: str) -> None:
+    """Right pane: SQL proof, law cites, SAR + officer sign-off."""
+    draft = st.session_state.get("pending_draft")
+    t_sql, t_law, t_sar = st.tabs(["⚡ SQL Signals", "📜 Cited Law", "📝 Draft SAR"])
+    with t_sql:
+        if not draft:
+            st.caption("Run a query on the left. Proof lands here.")
+        else:
+            st.caption(f"Query ID: `{clean_markdown(draft.get('query_id', ''))}` • model `{clean_markdown(draft.get('model_name', ''))}`")
+            rows = draft.get("tx_rows", []) or []
+            if rows:
+                st.dataframe(rows, use_container_width=True, hide_index=True, height=280)
+            else:
+                st.info("No signal rows for this query.")
+            st.caption(f"Evidence IDs: {clean_markdown(', '.join(draft.get('evidence_refs', [])))}")
+    with t_law:
+        if not draft:
+            st.caption("Matched clauses land here with distance scores.")
+        else:
+            for p in draft.get("policies", []) or []:
+                with st.container(border=True):
+                    st.markdown(f"**📍 {clean_markdown(p.get('policy_id', ''))} — {clean_markdown(p.get('title', ''))}**")
+                    sim = p.get("sim", p.get("SIM", ""))
+                    if sim != "":
+                        try:
+                            st.caption(f"Match: {float(sim):.3f} cosine (near 1.0 = close)")
+                        except Exception:
+                            pass
+                    st.info(clean_markdown(str(p.get("clause_text", "")))[:500])
+    with t_sar:
+        if not draft:
+            st.caption("Approved-wording draft lands here after you run a query.")
+        else:
+            st.text_area("SAR narrative (read-only draft)", value=clean_markdown(draft.get("report_text", "")), height=220)
+            st.caption(f"Hashes: prompt `{clean_markdown(draft.get('prompt_hash', ''))[:16]}…` • result `{clean_markdown(draft.get('result_hash', ''))[:16]}…`")
+            st.markdown("**Officer sign-off**")
+            if role != "officer":
+                st.info("You are analyst. An officer logs in to approve.")
+            else:
+                c1, c2 = st.columns([1, 1])
+                with c1:
+                    if st.button("✅ Approve & Log", type="primary", use_container_width=True):
+                        if not check_rate():
+                            st.stop()
+                        try:
+                            log_id = agent.approve_and_log(draft, approved_by=user_name)
+                            st.session_state.pop("pending_draft", None)
+                            try:
+                                st.toast(f"Approved + logged {log_id} 🔒")
+                            except Exception:
+                                pass
+                            st.success(f"Saved APPROVED SAR {log_id} by {clean_markdown(user_name)}")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Approve failed: {clean_markdown(str(e))}")
+                with c2:
+                    if st.button("❌ Discard draft", use_container_width=True):
+                        st.session_state.pop("pending_draft", None)
+                        st.rerun()
+            safe_md = build_safe_export(draft, user_name=user_name)
+            st.download_button("⬇ Safe export (.md, no raw SQL)", data=safe_md, file_name="sar_findings.md", mime="text/markdown")
+
+
 def main():
-    st.set_page_config(page_title=APP_TITLE, layout="wide")
+    st.set_page_config(page_title=APP_TITLE + " | Bank Compliance", page_icon="🛡️", layout="wide")
+    st.markdown(_CSS, unsafe_allow_html=True)
     # Fail fast if secrets missing. Clear error, not silent.
     # SiS uses st.user so no APP_PASSWORD. Local mode needs strong password.
     try:
@@ -318,62 +490,53 @@ def main():
     role = st.session_state.get("user_role", "analyst")
     user_name = st.session_state.get("user_name", "analyst-user")
     auth_mode = st.session_state.get("auth_mode", "local")
-    if auth_mode == "sis":
-        st.sidebar.caption(f"Snowflake user: {user_name} (SiS login, CURRENT_USER)")
-    else:
-        st.sidebar.write(f"Logged in as: {user_name} ({role})")
-    st.sidebar.caption("Rate limit is per-session demo only. Prod needs Redis/Snowflake global limit.")
-    if st.sidebar.button("Logout"):
-        st.session_state["auth_ok"] = False
-        st.session_state.pop("pending_draft", None)
-        st.session_state.pop("snowflake_role", None)
-        st.rerun()
-    st.title(APP_TITLE)
-    tab1, tab2 = st.tabs(["Ask + SAR draft", "Transactions"])
-    with tab1:
-        st.subheader("Ask question")
-        q = st.text_area("Type question (letters, numbers, space .,?!-#$@:/()_ only, max 2000)", max_chars=MAX_INPUT_LEN)
-        if st.button("Make draft"):
-            if not check_rate():
-                st.stop()
-            try:
-                intent = agent.classify_intent(q)
-                st.write("Intent found:")
-                st.text(intent)
-                tx_rows = agent.fetch_transactions("", limit=_evidence_limit(), offset=0)
-                policies = agent.vector_search(q, k=config.TOP_K)
-                st.write("Top policies:")
-                for p in policies:
-                    st.text(f"{p.get('policy_id','')} - {p.get('title','')}")
-                    st.text(str(p.get("clause_text",""))[:400])
-                draft = agent.build_draft(q, tx_rows, role)
-                st.session_state["pending_draft"] = draft
-                st.write("Draft report (needs officer approve):")
-                st.text(draft["report_text"])
-                st.text(f"Evidence: {', '.join(draft['evidence_refs'])}")
-                st.text(f"Policies: {', '.join(draft['policy_ids'])}")
-            except Exception as e:
-                logger.warning("Draft failed: %s", e)
-                st.error(f"Error: {clean_markdown(str(e))}")
-        draft = st.session_state.get("pending_draft")
-        if draft:
-            st.divider()
-            st.write("Human check: officer must approve before save.")
-            if role != "officer":
-                st.info("You are analyst. Ask an officer to log in and approve.")
-            else:
-                if st.button("Approve and save SAR"):
-                    if not check_rate():
-                        st.stop()
-                    try:
-                        log_id = agent.approve_and_log(draft, approved_by=user_name)
-                        st.success(f"Saved APPROVED SAR log {log_id} by {user_name}")
-                        st.session_state.pop("pending_draft", None)
-                    except Exception as e:
-                        st.error(f"Approve failed: {clean_markdown(str(e))}")
-            safe_md = build_safe_export(draft, user_name=user_name)
-            st.download_button("Download safe export (md)", data=safe_md, file_name="sar_findings.md", mime="text/markdown")
-    with tab2:
+    render_sidebar(user_name, role, auth_mode)
+    render_kpi_strip()
+    st.markdown("")
+    ws, tx = st.tabs(["💬 Workspace", "📊 Transactions"])
+    with ws:
+        chat_col, insp_col = st.columns([1.2, 0.8], gap="medium")
+        with chat_col:
+            st.markdown("#### 💬 Compliance Copilot")
+            st.caption("Quick queries (run the real pipeline):")
+            p1, p2 = st.columns(2)
+            for i, pill in enumerate(QUICK_PILLS):
+                with (p1 if i % 2 == 0 else p2):
+                    if st.button(pill, use_container_width=True, key=f"pill_{i}"):
+                        if not check_rate():
+                            st.stop()
+                        try:
+                            with st.spinner("Running router + vector + Cortex…"):
+                                run_pipeline(pill, role)
+                            st.rerun()
+                        except Exception as e:
+                            logger.warning("Draft failed: %s", e)
+                            st.error(f"Error: {clean_markdown(str(e))}")
+            with st.container(border=True):
+                turns = st.session_state.get("turns", [])
+                if not turns:
+                    with st.chat_message("assistant", avatar="🛡️"):
+                        st.write("Ask about wires, structuring, or policy. I return SQL proof + cited law, then draft the SAR.")
+                for t in turns[-6:]:
+                    with st.chat_message("user"):
+                        st.write(clean_markdown(t["q"])[:500])
+                    with st.chat_message("assistant", avatar="🛡️"):
+                        st.write(f"Intent `{clean_markdown(t['intent'])}` • {t['ev']} signals • {t['pol']} cites. Proof is on the right →")
+            q = st.chat_input("Ask a compliance question…")
+            if q:
+                if not check_rate():
+                    st.stop()
+                try:
+                    with st.spinner("Running router + vector + Cortex…"):
+                        run_pipeline(q, role)
+                    st.rerun()
+                except Exception as e:
+                    logger.warning("Draft failed: %s", e)
+                    st.error(f"Error: {clean_markdown(str(e))}")
+        with insp_col:
+            st.markdown("#### 🔍 Evidence Inspector")
+            render_inspector(role, user_name)
+    with tx:
         st.subheader("Transactions (20 per page)")
         page = st.number_input("Page number", min_value=1, max_value=500, value=1, step=1)
         filt = st.text_input("Filter by account (optional)")
