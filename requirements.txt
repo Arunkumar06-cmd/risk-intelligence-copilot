@@ -1,6 +1,6 @@
 # Risk copilot pins. Free 2026 Snowflake + Python only.
 # Docs: https://docs.snowflake.com/en/developer-guide/python-connector/python-connector-install
-snowflake-connector-python==3.13.0
+snowflake-connector-python==4.7.5
 streamlit==1.37.1
 cryptography==42.0.8
 pandas==2.2.2
