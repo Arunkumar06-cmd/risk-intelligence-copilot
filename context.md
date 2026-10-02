@@ -101,6 +101,6 @@ Snowflake must-haves:
 - **Release bot:** with `version_toml`, each release commits the new version into `pyproject.toml` (`chore(release): vX [skip ci]`) and pushes to `main` (seen working on v1.2.0, commit f25f01b). Before this, the bot only made tags, so `pyproject.toml` said `0.1.0` while tags said `v1.1.0`. `main` has no branch protection today, so the push works. CHANGELOG.md is hand-kept (it has no PSR insertion flag, so the bot does not write it); full notes live on the GitHub Releases page.
 - Later: multi-team roles, SSO (company login) for local mode, shared (Redis) per-minute limits.
 - Screenshots in `docs/` were taken with dummy Snowflake creds (login + empty dashboard states).
-- Deck: updated 2026-10-02. Team Name = Behelit, Team Leader = Arun Kumar, Team Size = 1 (solo). **Problem Statement `[PS-ID / Title]` on slide 1 is still a placeholder** (value not provided yet). Checked by Quick Look renders only, not in PowerPoint/Keynote.
+- Deck: updated 2026-10-02. Team Name = Behelit, Team Leader = Arun Kumar, Team Size = 1 (solo). Problem Statement = Risk, Fraud and Regulatory Intelligence Copilot. Checked by Quick Look renders only, not in PowerPoint/Keynote.
 
 > Note from an old chat (not a project fact): the first version of this file mentioned "Muse Spark", "Space bunny mode" and "nemotron". None of these appear anywhere in the code or config. Ignore them for project work.
