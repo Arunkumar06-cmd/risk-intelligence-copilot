@@ -1,15 +1,17 @@
 [project]
 name = "risk-intelligence-copilot"
-version = "0.1.0"
+# Synced to the last real release tag v1.1.0 (GitHub Releases). The release bot bumps it from here.
+version = "1.1.0"
 description = "AI copilot for bank compliance: English questions to verified SQL + cited regulations + draft SARs."
 requires-python = ">=3.11"
 
+# Release bot (python-semantic-release v10). Docs:
+# https://python-semantic-release.readthedocs.io/en/latest/configuration/configuration.html
+# Old keys version_variable / version_pattern / branch / version_source are not v10 keys, so removed.
+# Default branch rule already matches main.
 [tool.semantic_release]
-version_variable = "pyproject.toml:project.version"
-version_pattern = "version = \"{version}\""
-branch = "main"
+version_toml = ["pyproject.toml:project.version"]
 build_command = "echo no-build-step"
-version_source = "commit"
 commit_message = "chore(release): v{version} [skip ci]"
 commit_author = "semantic-release <semantic-release@python-semantic-release.com>"
 
@@ -18,3 +20,9 @@ exclude_commit_patterns = ["^docs/", "^\\.github/", "\\.pptx$", "\\.png$"]
 
 [tool.ruff]
 target-version = "py311"
+
+# Same rules as the pre-commit hook: syntax errors (E9) + real pyflakes bugs (F).
+# Skips unused imports/vars (F401, F841) so demo code never blocks.
+[tool.ruff.lint]
+select = ["E9", "F"]
+ignore = ["F401", "F841"]

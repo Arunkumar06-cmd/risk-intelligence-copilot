@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main]
 
+# Least access: CI only reads the code.
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -17,9 +21,10 @@ jobs:
       - name: Install deps
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pytest
+          pip install -r requirements.txt -r requirements-dev.txt
       - name: Compile check
-        run: python -m py_compile backend/config.py backend/hybrid_agent.py streamlit_app.py
-      - name: Run guard tests
-        run: python -m pytest tests/test_guards.py -q
+        run: python -m py_compile backend/config.py backend/demo.py backend/hybrid_agent.py backend/runtime.py streamlit_app.py
+      - name: Lint (ruff, same rules as pre-commit)
+        run: ruff check .
+      - name: Run all tests (guards + agent SQL + app smoke)
+        run: python -m pytest tests/ -q

@@ -45,7 +45,8 @@ ALTER TABLE IF EXISTS TRANSACTIONS ADD SEARCH OPTIMIZATION ON EQUALITY(TX_DATE);
 
 -- Policy table. Uses real vector type for search.
 -- AI_EMBED gives 768 length vector with arctic model.
--- Old EMBED_TEXT_768 is legacy EOL end 2026, use AI_EMBED now.
+-- AI_EMBED replaces legacy SNOWFLAKE.CORTEX.EMBED_TEXT_768 (see migration doc).
+-- Docs: https://docs.snowflake.com/en/user-guide/snowflake-cortex/aisql-migrate-legacy-functions
 CREATE TABLE IF NOT EXISTS REGULATORY_POLICIES (
   POLICY_ID STRING PRIMARY KEY,
   TITLE STRING,
@@ -97,6 +98,13 @@ UPDATE AUDIT_LOGS SET LOG_UUID = UUID_STRING() WHERE LOG_UUID IS NULL;
 -- Only officer and admin see all rows.
 -- Use IS_ROLE_IN_SESSION so SiS role lift is checked by Snowflake, not app dropdown.
 -- Docs: https://docs.snowflake.com/en/sql-reference/functions/is_role_in_session
+-- Scope of these role-based policies (second safety layer, defense in depth):
+-- - They work for direct SQL users and for the local app login (SNOWFLAKE_ROLE).
+-- - In SiS (Streamlit in Snowflake) every query runs with the app OWNER's rights, so
+--   CURRENT_ROLE() always returns the owner role (docs: SiS row-access page). There the app
+--   itself hides RESTRICTED-tier rows for viewers not in APP_OFFICERS, and masks a
+--   CUSTOMER_NAME column if one is ever shown (backend/hybrid_agent.fetch_transactions + mask_rows).
+-- Docs: https://docs.snowflake.com/en/developer-guide/streamlit/features/row-access
 CREATE OR REPLACE ROW ACCESS POLICY COMPLIANCE.ACCOUNTS_ROLE_FILTER
 AS (RISK_TIER VARCHAR) RETURNS BOOLEAN ->
   CASE
@@ -152,29 +160,50 @@ COMMENT ON COLUMN AUDIT_LOGS.LOG_UUID IS 'Safe UUID string made in Python. No ra
 COMMENT ON COLUMN AUDIT_LOGS.LOG_ID IS 'Old auto number. Kept for backward compat.';
 COMMENT ON COLUMN AUDIT_LOGS.EVIDENCE_REFS IS 'JSON list of TX_IDs used as evidence.';
 COMMENT ON COLUMN AUDIT_LOGS.POLICY_IDS IS 'JSON list of POLICY_IDs cited.';
-COMMENT ON COLUMN AUDIT_LOGS.MODEL_NAME IS 'LLM used: mistral-large3 or llama3.1-8b.';
-COMMENT ON COLUMN AUDIT_LOGS.MODEL_VERSION IS 'Model version tag for audit.';
+COMMENT ON COLUMN AUDIT_LOGS.MODEL_NAME IS 'LLM used: claude-sonnet-5 or llama3.1-8b (old rows may say mistral-large3).';
+COMMENT ON COLUMN AUDIT_LOGS.MODEL_VERSION IS 'Version label for audit. Cortex puts the version in the model name, so this holds the model name.';
 COMMENT ON COLUMN AUDIT_LOGS.PROMPT_HASH IS 'SHA256 of prompt plus model plus version.';
 COMMENT ON COLUMN AUDIT_LOGS.RESULT_HASH IS 'SHA256 of report text.';
-COMMENT ON COLUMN AUDIT_LOGS.STATUS IS 'DRAFT, APPROVED, or LOGIN_FAILED for denied login.';
-COMMENT ON COLUMN AUDIT_LOGS.APPROVED_BY IS 'Officer user name who approved.';
-COMMENT ON COLUMN AUDIT_LOGS.APPROVED_AT IS 'Time of approval.';
+COMMENT ON COLUMN AUDIT_LOGS.STATUS IS 'APPROVED, APPROVE_DENIED (blocked approval try), or LOGIN_FAILED (denied login).';
+COMMENT ON COLUMN AUDIT_LOGS.APPROVED_BY IS 'User name who approved (or tried to, for APPROVE_DENIED / LOGIN_FAILED).';
+COMMENT ON COLUMN AUDIT_LOGS.APPROVED_AT IS 'Time of the event: approval (APPROVED), blocked approval try (APPROVE_DENIED) or denied login (LOGIN_FAILED).';
 COMMENT ON COLUMN AUDIT_LOGS.QUERY_ID IS 'Snowflake query ID from cur.sfqid for proof. 2-step save.';
+
+-- Officer allow-list (who may approve a SAR). Used in SiS mode, where every query runs
+-- with the app owner's rights, so a role check cannot tell viewers apart.
+-- The app compares st.user.user_name (the viewer's Snowflake user name) with USER_NAME,
+-- using a bound value, at approve time on the server. Store names as Snowflake shows them
+-- (e.g. JSMITH); the app compares UPPER() on both sides.
+-- Docs: https://docs.snowflake.com/en/developer-guide/streamlit/app-development/personalization
+CREATE TABLE IF NOT EXISTS APP_OFFICERS (
+  USER_NAME STRING NOT NULL PRIMARY KEY,
+  ADDED_AT TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
+  ADDED_BY STRING
+);
+COMMENT ON TABLE APP_OFFICERS IS 'Officer allow-list. Only the admin role that owns this table may change it. App reads only.';
+
+-- Who may change the list: only the role that runs this script (table owner = admin role).
+-- No INSERT/UPDATE/DELETE grant is given to anyone else. Read-only grant for the app role:
+-- FILL AND RUN: replace <APP_OWNER_ROLE> with the SiS app owner role (or the local SNOWFLAKE_ROLE).
+-- Use a separate app owner role, NOT this admin role, so the app itself cannot edit the list.
+-- GRANT SELECT ON TABLE APP_OFFICERS TO ROLE <APP_OWNER_ROLE>;
+-- FILL AND RUN (admin): add an officer.
+-- INSERT INTO APP_OFFICERS (USER_NAME, ADDED_BY) SELECT 'JSMITH', CURRENT_USER();
 
 -- Key-pair auth: run once per user to add public key. Then use private key login.
 -- Docs: https://docs.snowflake.com/en/user-guide/key-pair-auth
 -- ALTER USER my_user SET RSA_PUBLIC_KEY='MIIBIj...';
 
--- Cortex Guard: use guardrails=>TRUE in AI_COMPLETE to turn on harm filter.
--- Docs: https://docs.snowflake.com/en/sql-reference/functions/ai_complete
+-- Cortex Guard (harm filter): set 'guardrails': TRUE inside model_parameters of AI_COMPLETE.
+-- Docs: https://docs.snowflake.com/en/sql-reference/functions/ai_complete-single-string
 
 -- Example: fill vector with new func. Keep model name exact.
 -- AI_EMBED(model, text) returns VECTOR.
 -- UPDATE REGULATORY_POLICIES
--- SET CLAUSE_VECTOR = SNOWFLAKE.CORTEX.AI_EMBED('snowflake-arctic-embed-m-v1.5', CLAUSE_TEXT)
+-- SET CLAUSE_VECTOR = AI_EMBED('snowflake-arctic-embed-m-v1.5', CLAUSE_TEXT)
 -- WHERE CLAUSE_VECTOR IS NULL;
 
--- Example: LLM call with guardrails. Primary mistral-large3 (256K), draft llama3.1-8b.
--- SELECT SNOWFLAKE.CORTEX.AI_COMPLETE(model=>'mistral-large3', prompt=>'hello', guardrails=>TRUE);
+-- Example: LLM call with guardrails. Primary claude-sonnet-5 (needs cross-region inference), draft llama3.1-8b.
+-- SELECT AI_COMPLETE(model => 'claude-sonnet-5', prompt => 'hello', model_parameters => {'guardrails': TRUE, 'temperature': 0});
 -- Keep VECTOR_COSINE_SIMILARITY for search, do NOT swap to L2.
--- SELECT VECTOR_COSINE_SIMILARITY(CLAUSE_VECTOR, SNOWFLAKE.CORTEX.AI_EMBED('snowflake-arctic-embed-m-v1.5', 'what is SAR')) FROM REGULATORY_POLICIES LIMIT 3;
+-- SELECT VECTOR_COSINE_SIMILARITY(CLAUSE_VECTOR, AI_EMBED('snowflake-arctic-embed-m-v1.5', 'what is SAR')) FROM REGULATORY_POLICIES LIMIT 3;

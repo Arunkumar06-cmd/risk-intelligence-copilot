@@ -1,15 +1,15 @@
 """Streamlit app with auth gate, HITL, rate limit, safe view. SiS-ready. Simple English."""
 import datetime
 import hmac
-import json
 import logging
 import time
-import os
 import re
 import uuid
 import streamlit as st
 from backend import config
+from backend import demo
 from backend import hybrid_agent as agent
+from backend import runtime
 
 # JSON log for SIEM threat watcher. Reads this log file for alerts.
 # Prod note: ship risk_copilot.log to SIEM collector.
@@ -79,81 +79,23 @@ def _evidence_limit() -> int:
 
 
 def get_sis_user() -> tuple:
-    """Detect Streamlit in Snowflake user. Returns (name, is_sis). Simple English."""
-    # Docs: https://docs.snowflake.com/en/developer-guide/streamlit/getting-started/overview
-    # In SiS, st.user gives login name. Local run has no st.user, so use password gate.
-    try:
-        u = getattr(st, "user", None)
-        if u is not None:
-            # New API: st.user.user_name or st.user.get("user_name").
-            name = ""
-            try:
-                name = str(getattr(u, "user_name", "") or "")
-            except Exception:
-                name = ""
-            if not name:
-                try:
-                    name = str(u.get("user_name", "") or "")  # type: ignore
-                except Exception:
-                    name = ""
-            if not name:
-                try:
-                    name = str(getattr(u, "name", "") or "")
-                except Exception:
-                    name = ""
-            if name:
-                return name.strip(), True
-    except Exception:
-        pass
-    # New API first (st.user). Old experimental_user raises on access in new
-    # Streamlit (>=1.45), so only touch it when st.user is missing.
-    if hasattr(st, "user"):
+    """Detect Streamlit in Snowflake + viewer name. Returns (name, is_sis). Simple English."""
+    # SiS is detected from the runtime (stored procedure or SPCS container), not from
+    # st.user alone, so a local login provider cannot fake SiS mode. See backend/runtime.py.
+    # In SiS, st.user.user_name = the viewer's Snowflake user name (docs: personalization).
+    if not runtime.is_sis_runtime():
         return "", False
-    try:
-        eu = st.experimental_user  # type: ignore[attr-defined]
-        if eu is not None:
-            try:
-                n2 = str(eu.get("user_name", "") or "")  # type: ignore
-                if n2:
-                    return n2.strip(), True
-            except Exception:
-                pass
-    except Exception:
-        pass
-    # Extra hint: SiS sets Snowflake env vars. Not proof, but helps log.
-    if os.getenv("SNOWFLAKE_ACCOUNT"):
-        pass
-    return "", False
+    return runtime.sis_viewer_name(), True
 
 
-def get_snowflake_role() -> str:
-    """Ask Snowflake for real role. Officer only if Snowflake says so. Simple English."""
-    # Docs: https://docs.snowflake.com/en/sql-reference/functions/is_role_in_session
-    # Never trust dropdown in SiS. Check CURRENT_ROLE + IS_ROLE_IN_SESSION.
-    # Cache role in session_state. Save once, reuse on rerun. No extra query.
-    cached = st.session_state.get("snowflake_role", "")
-    if cached in ("officer", "analyst"):
-        return cached
-    role = "analyst"
-    conn = None
+def get_viewer_role(user_name: str) -> str:
+    """SiS: officer only if the viewer is in APP_OFFICERS. Simple English."""
+    # Shows/hides the Approve button and the masking. approve_and_log checks again
+    # on the server at approve time, so this UI value cannot grant approval by itself.
     try:
-        conn = agent.get_pooled_connection()
-        try:
-            cur = conn.cursor()
-            cur.execute("SELECT CURRENT_ROLE(), IS_ROLE_IN_SESSION('COMPLIANCE_OFFICER')")
-            row = cur.fetchone()
-            cur.close()
-            if row and len(row) >= 2 and bool(row[1]):
-                role = "officer"
-        finally:
-            try:
-                agent.release_connection(conn)
-            except Exception:
-                pass
+        return "officer" if agent.viewer_is_officer(user_name) else "analyst"
     except Exception:
-        pass
-    st.session_state["snowflake_role"] = role
-    return role
+        return "analyst"
 
 
 def log_denied_login(user_name: str) -> None:
@@ -166,7 +108,8 @@ def log_denied_login(user_name: str) -> None:
         conn = agent.get_pooled_connection()
         try:
             cur = conn.cursor()
-            cur.execute(
+            agent.run_sql(
+                cur,
                 """
                 INSERT INTO AUDIT_LOGS
                 (LOG_UUID, USER_ROLE, QUERY_TEXT, INTENT, EVIDENCE_REFS, POLICY_IDS,
@@ -189,15 +132,33 @@ def log_denied_login(user_name: str) -> None:
 def check_login() -> bool:
     if st.session_state.get("auth_ok", False):
         return True
+    if agent.demo_on():
+        # Demo path (public link): fake data, no password, no Snowflake.
+        # Pick a role to try both sides of the officer sign-off.
+        st.title(APP_TITLE)
+        st.info("DEMO MODE: fake sample data, template SAR (no AI call), nothing is sent to Snowflake. "
+                "Pick a role to try the flow. The real app uses a password or Snowflake login.")
+        role = st.selectbox("Demo role", ["analyst", "officer"])
+        if st.button("Enter demo"):
+            st.session_state["auth_ok"] = True
+            st.session_state["user_role"] = role
+            st.session_state["user_name"] = f"{role}-user"
+            st.session_state["auth_mode"] = "demo"
+            st.rerun()
+        return False
     sis_name, is_sis = get_sis_user()
     if is_sis:
-        # SiS path: trust CURRENT_USER from Snowflake, no local password.
-        # Do NOT trust dropdown. Ask Snowflake for real role.
+        # SiS path: name from st.user, no local password, no dropdown.
+        # Role = viewer in APP_OFFICERS list or not (checked again at approve time).
         st.title(APP_TITLE)
-        st.caption(f"Running in Snowflake as {sis_name}. Using Snowflake login, no app password.")
-        st.info("Role is read from Snowflake session, not dropdown.")
+        if not sis_name:
+            # Fail closed: no viewer name means no identity, so no access.
+            st.error("Cannot read your Snowflake user name (st.user). Access stopped.")
+            return False
+        st.caption(f"Running in Snowflake as {clean_markdown(sis_name)}. Using Snowflake login, no app password.")
+        st.info("Officer role comes from the APP_OFFICERS list, not a dropdown.")
         if st.button("Continue as Snowflake user"):
-            role = get_snowflake_role()
+            role = get_viewer_role(sis_name)
             st.session_state["auth_ok"] = True
             st.session_state["user_role"] = role
             st.session_state["user_name"] = sis_name.strip()
@@ -223,8 +184,6 @@ def check_login() -> bool:
             st.session_state["user_role"] = role
             st.session_state["user_name"] = f"{role}-user"
             st.session_state["auth_mode"] = "local"
-            # Clear cached Snowflake role on new login.
-            st.session_state.pop("snowflake_role", None)
             logger.info("Login ok for %s", role)
             st.rerun()
         else:
@@ -236,11 +195,15 @@ def check_login() -> bool:
 
 
 def check_global_rate(user_name: str) -> bool:
-    """Real global limit via RATE_LIMIT table per hour. Simple English."""
+    """Real global limit via RATE_LIMIT table per hour. Fails closed. Simple English."""
     # MERGE bumps HIT_COUNT per user per hour window. Block if > 50.
     # Docs: https://docs.snowflake.com/en/sql-reference/sql/merge
     # Cleanup: DELETE windows older than 7 days via TASK. See sql/03_rate_limit.sql.
     # Single pooled conn. MERGE + SELECT in one txn deal. One commit.
+    # Fail closed: if the check itself breaks (e.g. sql/03 not run), block the request.
+    if agent.demo_on():
+        # Demo has no RATE_LIMIT table. The per-session 10/min cap (check_rate) still applies.
+        return True
     requester = str(user_name or "unknown").strip() or "unknown"
     per_hour = int(getattr(config, "RATE_LIMIT_PER_HOUR", 50))
     conn = None
@@ -248,7 +211,8 @@ def check_global_rate(user_name: str) -> bool:
         conn = agent.get_pooled_connection()
         try:
             cur = conn.cursor()
-            cur.execute(
+            agent.run_sql(
+                cur,
                 """
                 MERGE INTO RATE_LIMIT t
                 USING (SELECT %s AS U, DATE_TRUNC('hour', CURRENT_TIMESTAMP()) AS W) s
@@ -258,7 +222,8 @@ def check_global_rate(user_name: str) -> bool:
                 """,
                 (requester,),
             )
-            cur.execute(
+            agent.run_sql(
+                cur,
                 "SELECT HIT_COUNT FROM RATE_LIMIT WHERE USER_NAME = %s AND WINDOW_START = DATE_TRUNC('hour', CURRENT_TIMESTAMP())",
                 (requester,),
             )
@@ -269,9 +234,12 @@ def check_global_rate(user_name: str) -> bool:
                 cur.close()
                 st.warning(f"Global limit hit. Max {per_hour} per hour per user.")
                 return False
-            # Extra guard: count drafts by requester. Reuse same cur, not cur2.
-            cur.execute(
-                "SELECT COUNT(*) FROM AUDIT_LOGS WHERE USER_ROLE = %s AND CREATED_AT > DATEADD(hour, -1, CURRENT_TIMESTAMP())",
+            # Extra guard: approval tries (APPROVED + APPROVE_DENIED) by this user in the last hour.
+            # LOGIN_FAILED rows are NOT counted: anyone can write those with a wrong password,
+            # so counting them would let a stranger lock out a real officer.
+            agent.run_sql(
+                cur,
+                "SELECT COUNT(*) FROM AUDIT_LOGS WHERE APPROVED_BY = %s AND STATUS IN ('APPROVED', 'APPROVE_DENIED') AND CREATED_AT > DATEADD(hour, -1, CURRENT_TIMESTAMP())",
                 (requester,),
             )
             row2 = cur.fetchone()
@@ -279,15 +247,17 @@ def check_global_rate(user_name: str) -> bool:
             conn.commit()
             n2 = int(row2[0]) if row2 and row2[0] is not None else 0
             if n2 > per_hour:
-                st.warning("Global audit guard hit. Too many drafts per hour.")
+                st.warning("Global audit guard hit. Too many audit rows per hour.")
                 return False
         finally:
             try:
                 agent.release_connection(conn)
             except Exception:
                 pass
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("Rate-limit check failed (%s). Blocking request.", type(e).__name__)
+        st.warning("Rate-limit check failed, so the request was blocked. Run sql/03_rate_limit.sql and check the connection.")
+        return False
     return True
 
 
@@ -321,7 +291,7 @@ def clean_markdown(text: str) -> str:
 def build_safe_export(draft: dict, user_name: str = "") -> str:
     report = clean_markdown(draft.get("report_text", ""))
     user = str(user_name or draft.get("user_role", "")).strip()
-    made = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
+    made = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     lines = []
     lines.append("# SAR Draft - Findings")
     lines.append("")
@@ -349,9 +319,13 @@ def build_safe_export(draft: dict, user_name: str = "") -> str:
 def run_pipeline(q: str, role: str) -> dict:
     """One real pipeline: intent + signals + law + draft. Raises on error."""
     intent = agent.classify_intent(q)
-    tx_rows = agent.fetch_transactions("", limit=_evidence_limit(), offset=0)
+    # Non-officers never get RESTRICTED-tier rows; private columns come back masked.
+    # In SiS the backend checks APP_OFFICERS itself and ignores this local hint.
+    tx_rows = agent.fetch_transactions("", limit=_evidence_limit(), offset=0,
+                                       local_ui_hint=(role == "officer"))
     policies = agent.vector_search(q, k=config.TOP_K)
-    draft = agent.build_draft(q, tx_rows, role)
+    # Pass the same clauses in: one search per question, so Law tab == prompt == audit POLICY_IDS.
+    draft = agent.build_draft(q, tx_rows, role, policies=policies)
     draft["intent"] = intent
     draft["policies"] = policies
     draft["tx_rows"] = tx_rows
@@ -369,18 +343,26 @@ def render_sidebar(user_name: str, role: str, auth_mode: str) -> None:
     with st.sidebar:
         st.markdown("### 🛡️ Risk Intel")
         st.caption("Snowflake Cortex AI • GCC Edition")
-        _badge(f"{role.upper()} • {auth_mode}", "ok" if auth_mode == "sis" else "low")
+        _badge(f"{role.upper()} • {auth_mode}", "ok" if auth_mode == "sis" else ("med" if auth_mode == "demo" else "low"))
         st.caption(f"User: {clean_markdown(user_name)[:60]}")
         st.divider()
         st.caption("**Engine**")
-        st.caption(f"LLM: `{config.PRIMARY_MODEL}` (drafts: `{config.DRAFT_MODEL}`)")
-        st.caption(f"Embed: `{config.EMBED_MODEL}` • guardrails ON")
+        if auth_mode == "demo":
+            st.caption("DEMO: sample data + template SAR. No AI model, no Snowflake.")
+            st.caption(f"Real app: `{config.PRIMARY_MODEL}` (fallback `{config.DRAFT_MODEL}`), guardrails ON")
+            log = list(demo.DEMO_AUDIT_LOG)
+            st.caption(f"**Demo audit log (in memory):** {len(log)} rows")
+            for r in log[-5:][::-1]:
+                st.caption(f"{clean_markdown(r.get('status', ''))} • {clean_markdown(r.get('approved_by', ''))} • {clean_markdown(r.get('log_uuid', ''))[:8]}")
+        else:
+            st.caption(f"LLM: `{config.PRIMARY_MODEL}` (drafts: `{config.DRAFT_MODEL}`)")
+            st.caption(f"Embed: `{config.EMBED_MODEL}` • guardrails ON")
         st.divider()
         used_min = len([t for t in st.session_state.get("req_times", []) if time.time() - t < 60])
         st.caption(f"**Budget:** {used_min}/10 per min • {config.RATE_LIMIT_PER_HOUR}/h global")
         st.caption("Per-session cap is demo only. Prod: Redis/Snowflake.")
         if st.button("Logout"):
-            for k in ("auth_ok", "pending_draft", "snowflake_role", "turns", "req_times"):
+            for k in ("auth_ok", "pending_draft", "turns", "req_times"):
                 st.session_state.pop(k, None)
             st.rerun()
 
@@ -398,10 +380,10 @@ def render_kpi_strip() -> None:
                 _badge("HIGH VELOCITY" if level == "high" else "REVIEW", level)
     with k2:
         with st.container(border=True):
-            st.metric("Evidence items", str(ev_n), "live" if ev_n else "run a query")
+            st.metric("Evidence items", str(ev_n), ("sample" if agent.demo_on() else "live") if ev_n else "run a query")
     with k3:
         with st.container(border=True):
-            st.metric("Cited clauses", str(pol_n), "vector TOP-3" if pol_n else "—")
+            st.metric("Cited clauses", str(pol_n), ("word-match TOP-3" if agent.demo_on() else "vector TOP-3") if pol_n else "—")
     with k4:
         with st.container(border=True):
             used = len([t for t in st.session_state.get("req_times", []) if time.time() - t < 60])
@@ -416,10 +398,14 @@ def render_inspector(role: str, user_name: str) -> None:
         if not draft:
             st.caption("Run a query on the left. Proof lands here.")
         else:
-            st.caption(f"Query ID: `{clean_markdown(draft.get('query_id', ''))}` • model `{clean_markdown(draft.get('model_name', ''))}`")
-            rows = draft.get("tx_rows", []) or []
+            if agent.demo_on():
+                st.caption(f"Model `{clean_markdown(draft.get('model_name', ''))}` • demo: approval goes to the in-memory audit log")
+            else:
+                st.caption(f"Model `{clean_markdown(draft.get('model_name', ''))}` • Snowflake QUERY_ID is saved in AUDIT_LOGS on approval")
+            # Mask again at display (second layer). SiS: officer status asked on the server now.
+            rows = agent.mask_rows_for_viewer(draft.get("tx_rows", []) or [], role == "officer")
             if rows:
-                st.dataframe(rows, use_container_width=True, hide_index=True, height=280)
+                st.dataframe(rows, width="stretch", hide_index=True, height=280)
             else:
                 st.info("No signal rows for this query.")
             st.caption(f"Evidence IDs: {clean_markdown(', '.join(draft.get('evidence_refs', [])))}")
@@ -433,7 +419,8 @@ def render_inspector(role: str, user_name: str) -> None:
                     sim = p.get("sim", p.get("SIM", ""))
                     if sim != "":
                         try:
-                            st.caption(f"Match: {float(sim):.3f} cosine (near 1.0 = close)")
+                            kind = "word overlap" if agent.demo_on() else "cosine"
+                            st.caption(f"Match: {float(sim):.3f} {kind} (near 1.0 = close)")
                         except Exception:
                             pass
                     st.info(clean_markdown(str(p.get("clause_text", "")))[:500])
@@ -449,11 +436,14 @@ def render_inspector(role: str, user_name: str) -> None:
             else:
                 c1, c2 = st.columns([1, 1])
                 with c1:
-                    if st.button("✅ Approve & Log", type="primary", use_container_width=True):
+                    if st.button("✅ Approve & Log", type="primary", width="stretch"):
                         if not check_rate():
                             st.stop()
                         try:
-                            log_id = agent.approve_and_log(draft, approved_by=user_name)
+                            # SiS: re-read the viewer from st.user now (server side), not from
+                            # session state. The backend checks APP_OFFICERS again.
+                            approver = runtime.sis_viewer_name() if runtime.is_sis_runtime() else user_name
+                            log_id = agent.approve_and_log(draft, approved_by=approver)
                             st.session_state.pop("pending_draft", None)
                             try:
                                 st.toast(f"Approved + logged {log_id} 🔒")
@@ -464,7 +454,7 @@ def render_inspector(role: str, user_name: str) -> None:
                         except Exception as e:
                             st.error(f"Approve failed: {clean_markdown(str(e))}")
                 with c2:
-                    if st.button("❌ Discard draft", use_container_width=True):
+                    if st.button("❌ Discard draft", width="stretch"):
                         st.session_state.pop("pending_draft", None)
                         st.rerun()
             safe_md = build_safe_export(draft, user_name=user_name)
@@ -475,22 +465,29 @@ def main():
     st.set_page_config(page_title=APP_TITLE + " | Bank Compliance", page_icon="🛡️", layout="wide")
     st.markdown(_CSS, unsafe_allow_html=True)
     # Fail fast if secrets missing. Clear error, not silent.
-    # SiS uses st.user so no APP_PASSWORD. Local mode needs strong password.
-    try:
-        _, is_sis_boot = get_sis_user()
-    except Exception:
-        is_sis_boot = False
-    try:
-        config.validate_secrets(require_app_password=not is_sis_boot)
-    except Exception as e:
-        st.error(str(e))
-        st.stop()
+    # SiS: Snowflake gives the session (st.connection), so no secrets and no APP_PASSWORD.
+    # Local mode needs Snowflake keys + a strong APP_PASSWORD.
+    is_sis_boot = runtime.is_sis_runtime()
+    if not is_sis_boot and not agent.demo_on():
+        try:
+            config.validate_secrets(require_app_password=True)
+        except Exception as e:
+            st.error(str(e))
+            st.stop()
     if not check_login():
         st.stop()
     role = st.session_state.get("user_role", "analyst")
     user_name = st.session_state.get("user_name", "analyst-user")
     auth_mode = st.session_state.get("auth_mode", "local")
+    if auth_mode == "sis":
+        # Re-check the officer list on every rerun, so a removed officer loses the
+        # officer view on the next click (the backend checks again anyway).
+        role = get_viewer_role(runtime.sis_viewer_name())
+        st.session_state["user_role"] = role
     render_sidebar(user_name, role, auth_mode)
+    if auth_mode == "demo":
+        st.warning("DEMO MODE • fake sample data • SAR text comes from a fixed template, not an AI model • "
+                   "audit log is in memory only. Run locally or in Snowflake for the real Cortex AI path.")
     render_kpi_strip()
     st.markdown("")
     ws, tx = st.tabs(["💬 Workspace", "📊 Transactions"])
@@ -498,11 +495,11 @@ def main():
         chat_col, insp_col = st.columns([1.2, 0.8], gap="medium")
         with chat_col:
             st.markdown("#### 💬 Compliance Copilot")
-            st.caption("Quick queries (run the real pipeline):")
+            st.caption("Quick queries (run the demo pipeline):" if agent.demo_on() else "Quick queries (run the real pipeline):")
             p1, p2 = st.columns(2)
             for i, pill in enumerate(QUICK_PILLS):
                 with (p1 if i % 2 == 0 else p2):
-                    if st.button(pill, use_container_width=True, key=f"pill_{i}"):
+                    if st.button(pill, width="stretch", key=f"pill_{i}"):
                         if not check_rate():
                             st.stop()
                         try:
@@ -548,11 +545,12 @@ def main():
                 p = min(int(page), 500)
                 offset = (p - 1) * 20
                 filt_clean = str(filt or "").strip()
-                rows = agent.fetch_transactions(filt_clean, limit=20, offset=offset)
+                rows = agent.fetch_transactions(filt_clean, limit=20, offset=offset,
+                                                local_ui_hint=(role == "officer"))
                 if not rows:
                     st.info("No rows.")
                 else:
-                    st.dataframe(rows, height=400, use_container_width=True)
+                    st.dataframe(rows, height=400, width="stretch")
                     st.text(f"Page {p} - showing {len(rows)} rows")
             except Exception as e:
                 st.error(f"Load failed: {clean_markdown(str(e))}")

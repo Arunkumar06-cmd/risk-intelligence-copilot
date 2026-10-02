@@ -1,7 +1,9 @@
-# Risk copilot pins. Free 2026 Snowflake + Python only.
+# Risk copilot app pins (runtime only). Free 2026 Snowflake + Python only.
+# Test + lint tools live in requirements-dev.txt, so they never ship to the app.
 # Docs: https://docs.snowflake.com/en/developer-guide/python-connector/python-connector-install
 snowflake-connector-python==4.7.5
 streamlit==1.64.0
-cryptography==50.0.1
+cryptography==50.0.2
 pandas==3.0.6
-pytest==9.1.1
+# Optional Cortex Search client (only used when USE_CORTEX_SEARCH=TRUE). Apache-2.0.
+snowflake-core==1.13.2
