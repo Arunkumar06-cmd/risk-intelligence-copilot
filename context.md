@@ -1,13 +1,13 @@
 # context.md — Risk, Fraud & Regulatory Intelligence Copilot
 
-> Handoff doc (handover note). Everything a new agent or dev needs to pick up this project. Updated 2026-10-01 (first written 2026-09-30).
+> Handoff doc (handover note). Everything a new agent or dev needs to pick up this project. Updated 2026-10-02 (first written 2026-09-30).
 
 ## 1. What this is
 AI copilot (helper) for Banking/NBFC compliance teams. An analyst asks in plain English → the app returns **verified SQL evidence** (DB proof) + **cited regulation clauses** (law quotes) + a **draft SAR** (suspicious-activity report). A compliance officer must approve before anything is saved. Every approval, denied approval and denied login is audit-logged (written to a proof trail); drafts that are not approved are not stored.
 
 - **Repo:** https://github.com/Arunkumar06-cmd/risk-intelligence-copilot (public, MIT)
 - **Live demo:** https://arunkumar06-cmd.github.io/risk-intelligence-copilot/ (GitHub Pages, free). The app runs in the browser via stlite (Streamlit on Pyodide = Python in the browser). Demo mode only: fake sample data, template SAR, no Snowflake, no AI call. Built by `.github/workflows/pages.yml` on every push to `main`.
-- **Release:** last real tag + GitHub Release is `v1.1.0` (made by the release bot; each release ships an SBOM parts-list). `pyproject.toml` version now says `1.1.0` to match.
+- **Release:** latest GitHub Release is `v1.2.0` (2026-10-02), made by the release bot from the `feat:` merge of PR #12; it also wrote `1.2.0` into `pyproject.toml` (`version_toml` works). Each release ships an SBOM parts-list. Releases: https://github.com/Arunkumar06-cmd/risk-intelligence-copilot/releases
 - **Deck:** `Risk_Intelligence_Copilot_Submission.pptx` (CoCo CLI Hackathon, GCC Edition)
 - **Stack:** Snowflake Trial + Cortex AI (`AI_EMBED`, `AI_COMPLETE`, optional Cortex Search) + Streamlit UI + Python connector. Runs locally (own Snowflake login) or inside Snowflake (SiS = Streamlit in Snowflake, Snowflake's own session).
 
@@ -91,7 +91,7 @@ Snowflake must-haves:
 - **SiS query time cap** is set on the warehouse (`sql/02` step 3), because the app skips `ALTER SESSION` in SiS (owner's-rights stored procedures cannot set session parameters).
 - **SQL row policies in SiS** see the owner role only; the app-side filter does the per-viewer work there. Pick the owner-role option in `sql/02` step 1e.
 - Trial compute-pool access unknown.
-- **Release bot:** with `version_toml`, the next release will commit the new version into `pyproject.toml` (`chore(release): vX [skip ci]`) and push to `main`. Before this, the bot only made tags, so `pyproject.toml` said `0.1.0` while tags said `v1.1.0`. `main` has no branch protection today, so the push works. CHANGELOG.md is hand-kept (it has no PSR insertion flag, so the bot does not write it); full notes live on the GitHub Releases page.
+- **Release bot:** with `version_toml`, each release commits the new version into `pyproject.toml` (`chore(release): vX [skip ci]`) and pushes to `main` (seen working on v1.2.0, commit f25f01b). Before this, the bot only made tags, so `pyproject.toml` said `0.1.0` while tags said `v1.1.0`. `main` has no branch protection today, so the push works. CHANGELOG.md is hand-kept (it has no PSR insertion flag, so the bot does not write it); full notes live on the GitHub Releases page.
 - Later: multi-team roles, SSO (company login) for local mode, shared (Redis) per-minute limits.
 - Screenshots in `docs/` were taken with dummy Snowflake creds (login + empty dashboard states).
 - Deck: updated 2026-10-01 (facts, fit-to-slide layout, readable text colour, architecture picture lines). Team fields `[Your Team Name]`, `[PS-ID / Title]`, `[Name]`, `[N]` (slides 1 and 7) are left for the user to fill by hand. Checked by Quick Look renders only, not in PowerPoint/Keynote.

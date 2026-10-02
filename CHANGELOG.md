@@ -3,7 +3,9 @@
 > Release notes per version live on the [Releases page](https://github.com/Arunkumar06-cmd/risk-intelligence-copilot/releases) (made by the release bot from `feat:`/`fix:` commit words; each ships an SBOM parts-list).
 > This file is kept by hand. The bot does not write it (no insertion flag in this file).
 
-## Unreleased
+## 1.2.0 (2026-10-02)
+
+Released as [v1.2.0](https://github.com/Arunkumar06-cmd/risk-intelligence-copilot/releases/tag/v1.2.0) from PR #12.
 
 ### Live demo
 - Free live demo on GitHub Pages: https://arunkumar06-cmd.github.io/risk-intelligence-copilot/. Runs the real Streamlit app in the browser (stlite 1.9.2) in demo mode.
