@@ -1,0 +1,484 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Risk Copilot, Explained</title>
+<meta name="description" content="Feynman-style explainer of the Risk, Fraud &amp; Regulatory Intelligence Copilot: plain words first, then full technical depth.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,500..800&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --ground: #F3F6F5;
+    --surface: #FFFFFF;
+    --ink: #14211D;
+    --ink-soft: #46564F;
+    --rule: #D3DCD8;
+    --accent: #0B6B5F;
+    --accent-ink: #FFFFFF;
+    --accent-wash: #E1EFEC;
+    --gate: #9A4A06;
+    --gate-wash: #FBEBD9;
+    --code-bg: #EAF0EE;
+    --f-display: "Archivo", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
+    --f-body: "IBM Plex Sans", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --ground: #0C1412;
+      --surface: #121D1A;
+      --ink: #E2ECE8;
+      --ink-soft: #A3B5AE;
+      --rule: #263631;
+      --accent: #5CCFBC;
+      --accent-ink: #062520;
+      --accent-wash: #15302B;
+      --gate: #F1B266;
+      --gate-wash: #33230F;
+      --code-bg: #17241F;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --ground: #0C1412;
+    --surface: #121D1A;
+    --ink: #E2ECE8;
+    --ink-soft: #A3B5AE;
+    --rule: #263631;
+    --accent: #5CCFBC;
+    --accent-ink: #062520;
+    --accent-wash: #15302B;
+    --gate: #F1B266;
+    --gate-wash: #33230F;
+    --code-bg: #17241F;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font: 16px/1.62 var(--f-body);
+    padding-inline: 16px;
+    padding-block: 0 64px;
+  }
+  .wrap { max-width: 1120px; margin: 0 auto; display: grid; grid-template-columns: 1fr; gap: 40px; }
+  @media (min-width: 1080px) { .wrap { grid-template-columns: 220px minmax(0, 1fr); } }
+
+  nav.toc { display: none; }
+  @media (min-width: 1080px) {
+    nav.toc { display: block; position: sticky; top: calc(env(safe-area-inset-top, 0px) + 24px); align-self: start; padding-top: 32px; font-size: 14px; }
+    nav.toc ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+    nav.toc a { color: var(--ink-soft); text-decoration: none; }
+    nav.toc a:hover, nav.toc a:focus-visible { color: var(--accent); }
+    nav.toc .label { font: 600 12px/1 var(--f-body); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-soft); margin-bottom: 12px; }
+  }
+
+  main { min-width: 0; }
+  header.top { padding-block: 40px 28px; border-bottom: 1px solid var(--rule); display: grid; gap: 14px; }
+  .meta { font: 500 13px/1.4 var(--f-mono); color: var(--ink-soft); display: flex; flex-wrap: wrap; gap: 6px 18px; }
+  h1 { font: 800 clamp(34px, 6vw, 56px)/1.02 var(--f-display); font-stretch: 85%; letter-spacing: -0.01em; margin: 0; text-wrap: balance; }
+  .lede { font-size: 19px; max-width: 64ch; margin: 0; color: var(--ink); }
+  .links { display: flex; flex-wrap: wrap; gap: 10px; }
+  .btn { display: inline-block; padding: 8px 14px; border-radius: 6px; font: 600 14px/1.2 var(--f-body); text-decoration: none; border: 1px solid var(--accent); color: var(--accent); }
+  .btn.primary { background: var(--accent); color: var(--accent-ink); }
+  .btn:focus-visible { outline: 2px solid var(--gate); outline-offset: 2px; }
+
+  section { padding-block: 36px 8px; border-bottom: 1px solid var(--rule); }
+  h2 { font: 750 clamp(24px, 3.4vw, 32px)/1.15 var(--f-display); font-stretch: 88%; margin: 0 0 14px; text-wrap: balance; }
+  h3 { font: 700 19px/1.3 var(--f-display); margin: 0 0 8px; }
+  p { margin: 0 0 14px; max-width: 68ch; }
+  .eyebrow { font: 600 12px/1 var(--f-body); letter-spacing: .1em; text-transform: uppercase; color: var(--accent); margin-bottom: 10px; }
+  code, .mono { font-family: var(--f-mono); font-size: .9em; }
+  code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  pre { background: var(--code-bg); border: 1px solid var(--rule); border-radius: 8px; padding: 14px 16px; overflow-x: auto; font: 13.5px/1.55 var(--f-mono); margin: 0 0 14px; }
+  pre code { background: none; padding: 0; }
+  ul { margin: 0 0 14px; padding-left: 20px; max-width: 68ch; }
+  li { margin-bottom: 6px; }
+  .term { border-bottom: 1px dotted var(--ink-soft); }
+  .gloss { color: var(--ink-soft); }
+
+  /* Feynman layering: plain words, then the machinery */
+  .layer { display: grid; grid-template-columns: 1fr; gap: 18px; margin-bottom: 26px; }
+  @media (min-width: 820px) { .layer { grid-template-columns: minmax(0, 5fr) minmax(0, 8fr); gap: 28px; } }
+  .plain { background: var(--accent-wash); border-radius: 10px; padding: 18px 20px; align-self: start; }
+  .plain .tag, .deep .tag { font: 600 11px/1 var(--f-body); letter-spacing: .1em; text-transform: uppercase; margin-bottom: 10px; display: block; }
+  .plain .tag { color: var(--accent); }
+  .plain p { font-size: 16.5px; margin-bottom: 0; }
+  .deep .tag { color: var(--ink-soft); }
+  .deep > :last-child { margin-bottom: 0; }
+
+  .gate { background: var(--gate-wash); }
+  .gate .tag { color: var(--gate); }
+
+  .story { font-size: 18px; max-width: 66ch; }
+  .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; margin: 8px 0 22px; }
+  .fact { border-top: 2px solid var(--accent); padding-top: 10px; }
+  .fact b { display: block; font: 750 26px/1.1 var(--f-display); font-variant-numeric: tabular-nums; }
+  .fact span { font-size: 14px; color: var(--ink-soft); }
+
+  .diagram { overflow-x: auto; margin: 6px 0 22px; border: 1px solid var(--rule); border-radius: 10px; background: var(--surface); padding: 12px; }
+  .diagram svg { display: block; min-width: 720px; width: 100%; height: auto; }
+  .diagram text { font-family: var(--f-body); }
+
+  .tablewrap { overflow-x: auto; margin-bottom: 16px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14.5px; }
+  th, td { text-align: left; padding: 9px 12px 9px 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  th { font: 600 12px/1.2 var(--f-body); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-soft); }
+  td.num { font-variant-numeric: tabular-nums; font-family: var(--f-mono); white-space: nowrap; }
+
+  dl.glossary { display: grid; grid-template-columns: 1fr; gap: 4px 20px; margin: 0; }
+  @media (min-width: 720px) { dl.glossary { grid-template-columns: 200px minmax(0, 1fr); } }
+  dl.glossary dt { font: 600 15px/1.5 var(--f-mono); color: var(--accent); }
+  dl.glossary dd { margin: 0 0 10px; color: var(--ink); }
+
+  .sayback { counter-reset: s; list-style: none; padding: 0; }
+  .sayback li { counter-increment: s; display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 8px; font-size: 17px; margin-bottom: 10px; }
+  .sayback li::before { content: counter(s); font: 750 20px/1.4 var(--f-display); color: var(--accent); }
+
+  footer { padding-block: 28px; font-size: 14px; color: var(--ink-soft); }
+  a { color: var(--accent); }
+  @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+  html { scroll-behavior: smooth; }
+</style>
+<style>body{margin:0}img{max-width:100%}</style>
+</head>
+<body>
+<div class="wrap">
+  <nav class="toc" aria-label="Sections">
+    <div class="label">On this page</div>
+    <ol>
+      <li><a href="#story">The 30-second story</a></li>
+      <li><a href="#flow">The whole flow</a></li>
+      <li><a href="#door">1 · Front door</a></li>
+      <li><a href="#router">2 · Sorting the question</a></li>
+      <li><a href="#evidence">3 · Evidence rows</a></li>
+      <li><a href="#law">4 · Finding the law</a></li>
+      <li><a href="#draft">5 · Writing the draft</a></li>
+      <li><a href="#gate">6 · The officer gate</a></li>
+      <li><a href="#runtimes">Where it runs</a></li>
+      <li><a href="#output">Safe output</a></li>
+      <li><a href="#proof">Proof it works</a></li>
+      <li><a href="#limits">Honest limits</a></li>
+      <li><a href="#sayback">Say it back</a></li>
+      <li><a href="#glossary">Word list</a></li>
+    </ol>
+  </nav>
+
+  <main>
+    <header class="top">
+      <div class="meta"><span>Team Behelit</span><span>Arun Kumar (solo)</span><span>CoCo CLI Hackathon · GCC Edition</span><span>v1.2.0</span></div>
+      <h1>Risk Copilot, explained the Feynman way</h1>
+      <p class="lede">Each part is told twice. First in plain words a new teammate would get on day one. Then the real machinery: the file, the function, the SQL and the numbers. If the plain version and the deep version ever disagree, the deep version is the truth.</p>
+      <div class="links">
+        <a class="btn primary" href="https://arunkumar06-cmd.github.io/risk-intelligence-copilot/">Open the live demo</a>
+        <a class="btn" href="https://github.com/Arunkumar06-cmd/risk-intelligence-copilot">Read the code</a>
+      </div>
+    </header>
+
+    <section id="story">
+      <div class="eyebrow">Step 1 of the Feynman method · say it simply</div>
+      <h2>The 30-second story</h2>
+      <p class="story">A bank analyst types a question like <em>“draft a suspicious activity report for fast wires to high-risk countries.”</em> The copilot does three things a careful junior would do. It pulls the matching transaction rows from the database as proof. It finds the three rule clauses that fit best. It writes a short draft report that names every proof row and every rule it used. Then it stops. Nothing is saved until a compliance officer, a named person, presses Approve. Every approval, and every blocked try, goes into a log that cannot be argued with later.</p>
+      <p><b>The analogy:</b> a research assistant who brings you the receipts and the rulebook pages, writes the memo, and then hands the pen to the manager to sign. The assistant can never sign.</p>
+      <div class="facts">
+        <div class="fact"><b>3</b><span>law clauses cited per question (TOP_K)</span></div>
+        <div class="fact"><b>5</b><span>evidence rows per draft (EVIDENCE_TX_LIMIT)</span></div>
+        <div class="fact"><b>0</b><span>AI calls without the harm filter</span></div>
+        <div class="fact"><b>102</b><span>automated tests, no Snowflake needed</span></div>
+      </div>
+    </section>
+
+    <section id="flow">
+      <div class="eyebrow">The map</div>
+      <h2>The whole flow on one page</h2>
+      <p>Read it left to right, top row then bottom row. The orange box is the one step only a human can do.</p>
+      <div class="diagram" role="img" aria-label="Flow: question, input guard and rate limit, intent router, then evidence SQL and law search in parallel, then prompt builder, AI_COMPLETE with guardrails, draft, officer gate, and finally AUDIT_LOGS.">
+        <svg viewBox="0 0 760 270" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="var(--ink-soft)"/>
+            </marker>
+          </defs>
+          <g fill="var(--accent-wash)" stroke="var(--accent)" stroke-width="1.5">
+            <rect x="8" y="20" width="120" height="58" rx="8"/>
+            <rect x="160" y="20" width="130" height="58" rx="8"/>
+            <rect x="322" y="20" width="120" height="58" rx="8"/>
+            <rect x="476" y="6" width="136" height="44" rx="8"/>
+            <rect x="476" y="58" width="136" height="44" rx="8"/>
+            <rect x="8" y="170" width="140" height="58" rx="8"/>
+            <rect x="180" y="170" width="150" height="58" rx="8"/>
+            <rect x="362" y="170" width="110" height="58" rx="8"/>
+            <rect x="634" y="170" width="118" height="58" rx="8"/>
+          </g>
+          <rect x="504" y="170" width="102" height="58" rx="8" fill="var(--gate-wash)" stroke="var(--gate)" stroke-width="2"/>
+          <g fill="var(--ink)" font-size="13" font-weight="600" text-anchor="middle">
+            <text x="68" y="45">Question</text>
+            <text x="225" y="45">Input guard</text>
+            <text x="382" y="45">Intent router</text>
+            <text x="544" y="27">Evidence SQL</text>
+            <text x="544" y="79">Law search</text>
+            <text x="78" y="195">Prompt builder</text>
+            <text x="255" y="195">AI_COMPLETE</text>
+            <text x="417" y="195">Draft SAR</text>
+            <text x="555" y="195" fill="var(--gate)">Officer gate</text>
+            <text x="693" y="195">AUDIT_LOGS</text>
+          </g>
+          <g fill="var(--ink-soft)" font-size="11" text-anchor="middle">
+            <text x="68" y="62">plain English</text>
+            <text x="225" y="62">2000 chars · rate limit</text>
+            <text x="382" y="62">whole-word regex</text>
+            <text x="544" y="42">5 rows, bound values</text>
+            <text x="544" y="94">AI_EMBED · TOP-3</text>
+            <text x="78" y="212">≤350 words</text>
+            <text x="255" y="212">guardrails ON · temp 0</text>
+            <text x="417" y="212">+ SHA-256 hashes</text>
+            <text x="555" y="212">APP_OFFICERS</text>
+            <text x="693" y="212">APPROVED / DENIED</text>
+          </g>
+          <g stroke="var(--ink-soft)" stroke-width="1.5" fill="none" marker-end="url(#arr)">
+            <path d="M128 49 H156"/>
+            <path d="M290 49 H318"/>
+            <path d="M442 40 L472 30"/>
+            <path d="M442 58 L472 76"/>
+            <path d="M612 28 H640 V130 H78 V166"/>
+            <path d="M148 199 H176"/>
+            <path d="M330 199 H358"/>
+            <path d="M472 199 H500"/>
+            <path d="M606 199 H630"/>
+          </g>
+          <path d="M612 80 H640" stroke="var(--ink-soft)" stroke-width="1.5" fill="none"/>
+          <text x="380" y="252" fill="var(--ink-soft)" font-size="11.5" text-anchor="middle">Nothing reaches AUDIT_LOGS as APPROVED without passing the officer gate on the server.</text>
+        </svg>
+      </div>
+    </section>
+
+    <section id="door">
+      <div class="eyebrow">Step 2 of the Feynman method · go deep, one piece at a time</div>
+      <h2>1 · The front door: what may come in</h2>
+      <div class="layer">
+        <div class="plain"><span class="tag">In plain words</span><p>Before anything happens, the question is checked like a bag at airport security. Too long, strange symbols or database command words are rejected. People who ask too often are slowed down. If the speed check itself breaks, the answer is “no”, not “ok”.</p></div>
+        <div class="deep"><span class="tag">Under the hood</span>
+          <p><code>guardrail_check()</code> in <code>backend/hybrid_agent.py</code> runs on every input:</p>
+          <ul>
+            <li>Empty or over <b>2000</b> characters (<code>MAX_INPUT_LEN</code>) is rejected.</li>
+            <li>A character allow-list regex <code>^[A-Za-z0-9 .,?!#$@:/()_-]+$</code> (only these symbols pass). A semicolon fails, so chained SQL cannot even be typed.</li>
+            <li>Blocked whole words: DROP, DELETE, TRUNCATE, ALTER, GRANT, INSERT, UPDATE, UNION, INFORMATION_SCHEMA, XP_, EXEC.</li>
+          </ul>
+          <p>Rate limits (<code>streamlit_app.py</code>):</p>
+          <ul>
+            <li><b>10 per minute</b> per browser session, kept in memory.</li>
+            <li><b>50 per hour</b> per user in the <code>RATE_LIMIT</code> table, using one <code>MERGE</code> (insert-or-add-one in one statement) keyed by user and the hour window.</li>
+            <li>An audit guard also counts only <code>APPROVED</code> and <code>APPROVE_DENIED</code> rows. Failed logins are left out, so a stranger cannot lock out a real officer by typing wrong passwords.</li>
+            <li>Any error in the check blocks the request (<span class="term">fail closed</span>).</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section id="router">
+      <h2>2 · Sorting the question</h2>
+      <div class="layer">
+        <div class="plain"><span class="tag">In plain words</span><p>The app decides what kind of question it got: “write a report”, “show me rules” or “review transactions”. It only reacts to whole words, so “necessary” is not mistaken for “SAR”.</p></div>
+        <div class="deep"><span class="tag">Under the hood</span>
+          <p><code>classify_intent()</code> tests three compiled regexes with <code>\b</code> word edges, in this order:</p>
+<pre><code>sar_draft      \b(?:sars?|suspicious|report(?:s|ed|ing)?)\b
+policy_lookup  \b(?:polic(?:y|ies)|rules?|clauses?|regulations?)\b
+tx_review      \b(?:transactions?|payments?|transfer(?:s|red|ring)?|tx)\b
+otherwise      general</code></pre>
+          <p>No AI is used here. It is deterministic (same input, same answer), free, and testable offline. The user's text never becomes SQL. Queries come from fixed templates, and user values are passed as <span class="term">bound parameters</span> (sent separately from the SQL text).</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="evidence">
+      <h2>3 · Evidence rows: the receipts</h2>
+      <div class="layer">
+        <div class="plain"><span class="tag">In plain words</span><p>The app pulls recent transactions from the bank's tables as proof. Analysts never see accounts marked RESTRICTED; officers do. Customer names are hidden from non-officers.</p></div>
+        <div class="deep"><span class="tag">Under the hood</span>
+          <p><code>fetch_transactions()</code> builds one fixed query over <code>TRANSACTIONS T</code>:</p>
+<pre><code>SELECT T.TX_ID, T.ACCOUNT_ID, T.AMOUNT, T.CURRENCY, T.TX_DATE, T.MERCHANT
+FROM TRANSACTIONS T WHERE 1=1
+  [AND T.ACCOUNT_ID LIKE %s ESCAPE '\\']          -- filter, bound + LIKE-escaped
+  [AND EXISTS (... A.RISK_TIER != 'RESTRICTED')]  -- non-officers only
+ORDER BY T.TX_DATE DESC LIMIT 5 OFFSET 0</code></pre>
+          <ul>
+            <li><code>LIMIT</code>/<code>OFFSET</code> are Python ints that are clamped (limit 1–20, offset 0–10000), then written in as digits. The docs do not prove that server-side binding of LIMIT works, so they are never bound and never come from user text.</li>
+            <li>Two layers of hiding:
+              <ul>
+                <li>the app-side filter and <code>mask_rows()</code>;</li>
+                <li>Snowflake row access policies (<code>ACCOUNTS_ROLE_FILTER</code>, <code>TRANSACTIONS_ROLE_FILTER</code>) plus the masking policy <code>MASK_CUSTOMER_NAME</code> in <code>sql/01_setup.sql</code>.</li>
+              </ul>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section id="law">
+      <h2>4 · Finding the law by meaning, not by keyword</h2>
+      <div class="layer">
+        <div class="plain"><span class="tag">In plain words</span><p>Every rule clause was turned into a list of 768 numbers that captures its meaning. The question is turned into the same kind of list. Clauses whose numbers “point the same way” as the question are the best match, so the top three are shown with a score.</p></div>
+        <div class="deep"><span class="tag">Under the hood</span>
+          <p><code>vector_search()</code> runs inside Snowflake:</p>
+<pre><code>SELECT POLICY_ID, TITLE, CLAUSE_TEXT,
+  VECTOR_COSINE_SIMILARITY(CLAUSE_VECTOR,
+    AI_EMBED('snowflake-arctic-embed-m-v1.5', %s)) AS SIM
+FROM REGULATORY_POLICIES ORDER BY SIM DESC LIMIT 3</code></pre>
+          <ul>
+            <li><code>CLAUSE_VECTOR</code> is <code>VECTOR(FLOAT, 768)</code>. Cosine similarity = (a·b) / (|a|·|b|), from −1 to 1, and near 1 means close in meaning.</li>
+            <li>The model name must be a literal in the SQL, so it is checked against <code>ALLOWED_EMBED_MODELS</code> first (it raises <code>ValueError</code> if not listed).</li>
+            <li>Each clause is cut to 400 characters (<code>MAX_CLAUSE_CHARS</code>).</li>
+            <li>Optional: <b>Cortex Search</b> (<code>USE_CORTEX_SEARCH=TRUE</code>, <code>sql/04</code>), which adds keyword match and reranking. Any error or zero hits falls back to cosine.</li>
+            <li>It runs once per question, and the same list feeds the screen, the prompt and the audit row.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section id="draft">
+      <h2>5 · Writing the draft</h2>
+      <div class="layer">
+        <div class="plain"><span class="tag">In plain words</span><p>The app hands the AI a short, tightly fenced brief: the question, the proof rows and the three clauses, with the rule “facts only, list the IDs.” A harm filter is always on. If the main AI is unavailable, a smaller one takes over, with the same filter.</p></div>
+        <div class="deep"><span class="tag">Under the hood</span>
+          <p><code>_build_prompt()</code>:</p>
+          <ul>
+            <li>Uses up to 10 evidence lines (≤4000 characters) and up to 3 clauses.</li>
+            <li>Cuts the whole prompt to <b>350 words</b>.</li>
+          </ul>
+          <p><code>_run_ai_complete()</code> sends:</p>
+<pre><code>SELECT AI_COMPLETE(model =&gt; %s, prompt =&gt; %s,
+  model_parameters =&gt; {'guardrails': TRUE, 'temperature': 0})</code></pre>
+          <ul>
+            <li>Primary model: <code>claude-sonnet-5</code> (GA, which means generally available; needs cross-region inference). Fallback: <code>llama3.1-8b</code>. Both are in an allow-list, and both run with <b>Cortex Guard</b> (Snowflake's harm filter).</li>
+            <li><code>temperature 0</code> gives the most repeatable wording, which suits an audit trail.</li>
+            <li>Fingerprints:
+              <ul>
+                <li><code>prompt_hash = SHA-256(prompt | model | version)</code></li>
+                <li><code>result_hash = SHA-256(report)</code></li>
+              </ul>
+              Change one character and the hash changes.
+            </li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section id="gate">
+      <h2>6 · The officer gate: the one step AI never does</h2>
+      <div class="layer">
+        <div class="plain gate"><span class="tag">In plain words</span><p>Only a person on the officer list can approve. The check happens on the server at the moment of the click, not from what the screen says. If someone tries without permission, the attempt is written down under their real name.</p></div>
+        <div class="deep"><span class="tag">Under the hood</span>
+          <p><code>approve_and_log()</code> runs these checks in order:</p>
+          <ul>
+            <li>The draft must have <code>status == "DRAFT"</code>, and the approver must be non-empty.</li>
+            <li><b>Inside Snowflake (SiS):</b> it reads the viewer from <code>st.user.user_name</code> at click time. The viewer must equal the approver and be in <code>APP_OFFICERS</code> (looked up with a bound value; a lookup error counts as “no”).</li>
+            <li><b>Local:</b> the Snowflake login must hold <code>COMPLIANCE_OFFICER</code> (checked with <code>IS_ROLE_IN_SESSION</code>). <code>ALLOW_LOCAL_APPROVE</code> is a demo-only switch, default FALSE.</li>
+            <li><b>Pass:</b> it inserts an <code>APPROVED</code> row with a Python <code>uuid4</code> (no <code>MAX(ID)</code> race between two people saving at once), plus the evidence IDs, policy IDs, model, hashes and timestamp. It then saves the Snowflake <code>QUERY_ID</code> (<code>cursor.sfqid</code>) as extra proof.</li>
+            <li><b>Fail:</b> it writes an <code>APPROVE_DENIED</code> row naming the real viewer, e.g. <code>JSMITH (claimed BOSS)</code>, then raises <code>PermissionError</code>.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section id="runtimes">
+      <h2>Where it runs: three homes, one codebase</h2>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Home</th><th>How it is detected</th><th>How it talks to data</th><th>Who it is for</th></tr></thead>
+          <tbody>
+            <tr><td><b>Local</b></td><td>default</td><td>Python connector with secrets or a key file. <code>%s</code> placeholders. 30 s / 60 s query caps via <code>ALTER SESSION</code>.</td><td>One developer or demo user (app password + role dropdown)</td></tr>
+            <tr><td><b>Inside Snowflake (SiS)</b></td><td>Warehouse runtime: <code>running_in_sis()</code>. Container: <code>SNOWFLAKE_HOST</code> + <code>/snowflake/session/token</code>.</td><td><code>st.connection("snowflake")</code>. A small adapter switches <code>%s</code> → <code>?</code> (qmark). There is no ALTER SESSION, so the time cap lives on the warehouse.</td><td>Many users, each a real Snowflake identity</td></tr>
+            <tr><td><b>Browser demo</b></td><td><code>sys.platform == "emscripten"</code> (Pyodide) or <code>DEMO_MODE=TRUE</code>. Never on inside SiS.</td><td>No database. <code>backend/demo.py</code> has 8 sample rows and 4 sample clauses. The draft is a fixed template, and the audit log lives in memory.</td><td>Judges and visitors on GitHub Pages (stlite 1.9.2 → Streamlit 1.62 in the browser)</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="output">
+      <h2>Safe output</h2>
+      <div class="layer">
+        <div class="plain"><span class="tag">In plain words</span><p>Anything that came from a user or the AI is cleaned before it is shown, so it cannot sneak code into the page. The download contains findings and IDs, never the raw database queries.</p></div>
+        <div class="deep"><span class="tag">Under the hood</span>
+          <ul>
+            <li><code>clean_markdown()</code> strips every <code>&lt;…&gt;</code> tag before display. The only HTML on the page is static CSS and badge shells, and badge labels pass through the stripper too. This stops <span class="term">XSS</span> (script injection into a web page).</li>
+            <li><code>build_safe_export()</code> writes the findings, evidence IDs, policy IDs and both hashes as Markdown, with no SQL.</li>
+            <li>AI and search failures are logged by error type only, because the full error text could echo prompt data.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section id="proof">
+      <div class="eyebrow">Step 3 of the Feynman method · test what you claim</div>
+      <h2>Proof it works</h2>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Test file</th><th>Tests</th><th>What it proves</th></tr></thead>
+          <tbody>
+            <tr><td><code>test_guards.py</code></td><td class="num">9</td><td>Input guard and router basics</td></tr>
+            <tr><td><code>test_agent_sql.py</code></td><td class="num">35</td><td>SQL shape, guardrails always on, model allow-lists, router edge cases, Cortex Search fallback, one search per question</td></tr>
+            <tr><td><code>test_app_smoke.py</code></td><td class="num">8</td><td>Real Streamlit screens (AppTest) in local and SiS mode with no database</td></tr>
+            <tr><td><code>test_sis_mode.py</code></td><td class="num">41</td><td>SiS detection, the <code>?</code> adapter on real connector classes, officer list, denied-approval audit, masking, rate limit, int-only LIMIT</td></tr>
+            <tr><td><code>test_demo_mode.py</code></td><td class="num">9</td><td>Demo never touches the database, hides RESTRICTED rows, only the officer approves, full run end to end</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Every push runs:</p>
+      <ul>
+        <li>CI: compile, ruff (code style checker) and the 102 tests.</li>
+        <li>Security: CodeQL (code flaw scanner, for Python and workflow files), Gitleaks (password leak scan) and pip-audit (known-bad library check).</li>
+        <li>Release: an automatic version number plus an SBOM (full list of parts).</li>
+        <li>Pages: redeploys the live demo.</li>
+      </ul>
+    </section>
+
+    <section id="limits">
+      <div class="eyebrow">Step 4 of the Feynman method · find the gaps</div>
+      <h2>Honest limits</h2>
+      <ul>
+        <li><b>Not yet run on a live Snowflake account.</b> The Cortex calls, SQL scripts, SiS deploy and Cortex Search are checked against the docs and fake-database tests only.</li>
+        <li><b>Evidence is the newest rows the viewer may see</b>, not rows matched to the question's meaning. Matching evidence to the question is the next upgrade.</li>
+        <li><b>The browser demo does not call an AI.</b> Its draft is a template, labelled as such on screen.</li>
+        <li><b>Local mode is single-user</b> by design. Multi-user approval needs the Snowflake deploy.</li>
+        <li>Later: SSO (company login), multi-team roles, and shared per-minute limits.</li>
+      </ul>
+    </section>
+
+    <section id="sayback">
+      <div class="eyebrow">Step 5 of the Feynman method · say it back simply</div>
+      <h2>Say it back in five sentences</h2>
+      <ol class="sayback">
+        <li>The question is checked at the door and slowed down if it comes too often.</li>
+        <li>The app sorts the question with whole-word rules, then pulls proof rows with fixed, safe SQL.</li>
+        <li>It finds the three closest rule clauses by meaning, using 768-number vectors.</li>
+        <li>An AI writes a short draft with its harm filter always on, and the draft is fingerprinted.</li>
+        <li>Only a listed officer, checked on the server at click time, can turn the draft into a permanent audit record.</li>
+      </ol>
+    </section>
+
+    <section id="glossary">
+      <h2>Word list</h2>
+      <dl class="glossary">
+        <dt>SAR</dt><dd>Suspicious Activity Report: the form a bank files when money movement looks wrong.</dd>
+        <dt>Cortex AI</dt><dd>Snowflake's built-in AI functions, called from SQL (AI_EMBED, AI_COMPLETE).</dd>
+        <dt>Embedding</dt><dd>A list of numbers that stores the meaning of a text, so meanings can be compared.</dd>
+        <dt>Cosine similarity</dt><dd>How much two number-lists point the same way; 1 = same meaning.</dd>
+        <dt>Bound parameter</dt><dd>A value sent separately from the SQL text, so it can never change the query.</dd>
+        <dt>Cortex Guard</dt><dd>Snowflake's filter that blocks harmful AI answers.</dd>
+        <dt>HITL</dt><dd>Human in the loop: a person must approve before anything final happens.</dd>
+        <dt>SiS</dt><dd>Streamlit in Snowflake: the app runs inside the customer's Snowflake account.</dd>
+        <dt>Fail closed</dt><dd>If a safety check breaks, the answer is “no”.</dd>
+        <dt>stlite / Pyodide</dt><dd>Python and Streamlit running inside a web browser, with no server.</dd>
+        <dt>SHA-256</dt><dd>A fingerprint of text; any change gives a completely different fingerprint.</dd>
+        <dt>SBOM</dt><dd>Software bill of materials: the full parts list of a release.</dd>
+      </dl>
+    </section>
+
+    <footer>Team Behelit · Arun Kumar · Risk, Fraud &amp; Regulatory Intelligence Copilot · MIT License · Facts match repo version v1.2.0.</footer>
+  </main>
+</div>
+</body>
+</html>
