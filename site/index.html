@@ -16,7 +16,7 @@
   <body>
     <div id="note">
       Demo build: fake sample data, template SAR, no Snowflake, no AI call. First load takes about 20-60 seconds (Python starts in your browser).
-      Code: <a href="https://github.com/Arunkumar06-cmd/risk-intelligence-copilot">GitHub repo</a>
+      Code: <a href="https://github.com/Arunkumar06-cmd/risk-intelligence-copilot">GitHub repo</a> · <a href="./context.html">How it works (explainer)</a>
     </div>
     <div id="root"></div>
     <script type="module">
@@ -27,6 +27,7 @@
           entrypoint: "streamlit_app.py",
           files: {
             "streamlit_app.py": { url: "./app/streamlit_app.py" },
+            "backend/__init__.py": { url: "./app/backend/__init__.py" },
             "backend/config.py": { url: "./app/backend/config.py" },
             "backend/demo.py": { url: "./app/backend/demo.py" },
             "backend/hybrid_agent.py": { url: "./app/backend/hybrid_agent.py" },

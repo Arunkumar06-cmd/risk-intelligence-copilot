@@ -8,7 +8,8 @@ AI copilot (helper) for Banking/NBFC compliance teams. An analyst asks in plain 
 - **Repo:** https://github.com/Arunkumar06-cmd/risk-intelligence-copilot (public, MIT)
 - **Live demo:** https://arunkumar06-cmd.github.io/risk-intelligence-copilot/ (GitHub Pages, free). The app runs in the browser via stlite (Streamlit on Pyodide = Python in the browser). Demo mode only: fake sample data, template SAR, no Snowflake, no AI call. Built by `.github/workflows/pages.yml` on every push to `main`.
 - **Release:** latest GitHub Release is `v1.2.0` (2026-10-02), made by the release bot from the `feat:` merge of PR #12; it also wrote `1.2.0` into `pyproject.toml` (`version_toml` works). Each release ships an SBOM parts-list. Releases: https://github.com/Arunkumar06-cmd/risk-intelligence-copilot/releases
-- **Deck:** `Risk_Intelligence_Copilot_Submission.pptx` (CoCo CLI Hackathon, GCC Edition)
+- **Deck:** `docs/deck/Risk_Intelligence_Copilot_Submission.pptx` (CoCo CLI Hackathon, GCC Edition). Team **Behelit**, Arun Kumar (solo).
+- **Explainer:** `docs/context.html` (Feynman-style: plain words, then full technical depth), live at https://arunkumar06-cmd.github.io/risk-intelligence-copilot/context.html
 - **Stack:** Snowflake Trial + Cortex AI (`AI_EMBED`, `AI_COMPLETE`, optional Cortex Search) + Streamlit UI + Python connector. Runs locally (own Snowflake login) or inside Snowflake (SiS = Streamlit in Snowflake, Snowflake's own session).
 
 ## 2. How it works (3 steps + human gate)
@@ -22,6 +23,7 @@ AI copilot (helper) for Banking/NBFC compliance teams. An analyst asks in plain 
 risk_copilot/
 ├── streamlit_app.py          # UI: login, KPI strip, chat + inspector, transactions
 ├── backend/
+│   ├── __init__.py           # makes backend an explicit package
 │   ├── hybrid_agent.py       # router + vector/Cortex search + AI_COMPLETE + run_sql adapter + officer gate + masking + audit insert
 │   ├── runtime.py            # local vs SiS detection, st.user viewer name, SiS connection (st.connection)
 │   ├── demo.py               # DEMO MODE: fake rows, sample clauses (not real law), template SAR, in-memory audit log
@@ -41,7 +43,12 @@ risk_copilot/
 ├── requirements.txt          # app runtime pins only (this is what SiS installs)
 ├── requirements-dev.txt      # pytest + ruff (CI / dev only, never shipped)
 ├── .streamlit/config.toml    # dark theme; secrets.toml.example = key template
-├── docs/app_login.png, app_dashboard.png  # screenshots (dummy Snowflake creds)
+├── docs/
+│   ├── ARCHITECTURE.md       # deep reference (moved out of the README): pipeline, models, SiS deploy, security model, cost
+│   ├── context.html          # Feynman explainer (also published on Pages)
+│   ├── deck/                 # hackathon .pptx
+│   └── assets/               # screenshots of the live demo (demo-draft / demo-law / demo-workspace)
+├── CONTRIBUTING.md, .editorconfig  # setup + checks + commit format; same whitespace rules in every editor
 ├── .github/workflows/        # ci.yml (compile + ruff + tests) + security.yml (CodeQL python+actions, Gitleaks, pip-audit) + release.yml (auto version + SBOM) + pages.yml (live demo to GitHub Pages)
 ├── .github/dependabot.yml    # auto update bot: pip weekly, Actions monthly, pre-commit monthly
 ├── .pre-commit-config.yaml   # 7 hooks (pre-commit-hooks v6.0.0 + ruff-check v0.16.9)
@@ -94,6 +101,6 @@ Snowflake must-haves:
 - **Release bot:** with `version_toml`, each release commits the new version into `pyproject.toml` (`chore(release): vX [skip ci]`) and pushes to `main` (seen working on v1.2.0, commit f25f01b). Before this, the bot only made tags, so `pyproject.toml` said `0.1.0` while tags said `v1.1.0`. `main` has no branch protection today, so the push works. CHANGELOG.md is hand-kept (it has no PSR insertion flag, so the bot does not write it); full notes live on the GitHub Releases page.
 - Later: multi-team roles, SSO (company login) for local mode, shared (Redis) per-minute limits.
 - Screenshots in `docs/` were taken with dummy Snowflake creds (login + empty dashboard states).
-- Deck: updated 2026-10-01 (facts, fit-to-slide layout, readable text colour, architecture picture lines). Team fields `[Your Team Name]`, `[PS-ID / Title]`, `[Name]`, `[N]` (slides 1 and 7) are left for the user to fill by hand. Checked by Quick Look renders only, not in PowerPoint/Keynote.
+- Deck: updated 2026-10-02. Team Name = Behelit, Team Leader = Arun Kumar, Team Size = 1 (solo). **Problem Statement `[PS-ID / Title]` on slide 1 is still a placeholder** (value not provided yet). Checked by Quick Look renders only, not in PowerPoint/Keynote.
 
 > Note from an old chat (not a project fact): the first version of this file mentioned "Muse Spark", "Space bunny mode" and "nemotron". None of these appear anywhere in the code or config. Ignore them for project work.

@@ -25,8 +25,9 @@ jobs:
         run: |
           mkdir -p _site/app/backend
           cp site/index.html _site/index.html
+          cp docs/context.html _site/context.html
           cp streamlit_app.py _site/app/
-          cp backend/config.py backend/demo.py backend/hybrid_agent.py backend/runtime.py _site/app/backend/
+          cp backend/__init__.py backend/config.py backend/demo.py backend/hybrid_agent.py backend/runtime.py _site/app/backend/
           touch _site/.nojekyll
       - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v5

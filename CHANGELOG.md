@@ -3,6 +3,14 @@
 > Release notes per version live on the [Releases page](https://github.com/Arunkumar06-cmd/risk-intelligence-copilot/releases) (made by the release bot from `feat:`/`fix:` commit words; each ships an SBOM parts-list).
 > This file is kept by hand. The bot does not write it (no insertion flag in this file).
 
+## Unreleased
+
+### Docs and layout
+- New README: typing header, quick-link and status badges, live-demo screenshot, tooling grid, Mermaid flow, metrics table, docs index.
+- Deep reference moved to `docs/ARCHITECTURE.md`; Feynman explainer added as `docs/context.html` and published at `/context.html` on Pages.
+- Repo layout: deck → `docs/deck/`, screenshots → `docs/assets/` (old dummy-credential screenshots removed), `backend/__init__.py`, `CONTRIBUTING.md`, `.editorconfig`.
+- Deck: team Behelit, Arun Kumar (solo).
+
 ## 1.2.0 (2026-10-02)
 
 Released as [v1.2.0](https://github.com/Arunkumar06-cmd/risk-intelligence-copilot/releases/tag/v1.2.0) from PR #12.
