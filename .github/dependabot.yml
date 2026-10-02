@@ -1,11 +1,18 @@
 version: 2
 updates:
+  # pip scans every *requirements*.txt in / (requirements.txt + requirements-dev.txt).
   - package-ecosystem: pip
     directory: /
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
   - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+  # pre-commit hook versions (rev: lines in .pre-commit-config.yaml).
+  # Docs: https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-options-reference
+  - package-ecosystem: pre-commit
     directory: /
     schedule:
       interval: monthly

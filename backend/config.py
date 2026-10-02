@@ -1,6 +1,7 @@
 """Load secrets. No hardcode. Simple English."""
 import logging
 import os
+import sys
 
 logger = logging.getLogger(__name__)
 
@@ -52,30 +53,51 @@ APP_PASSWORD = _get_secret("APP_PASSWORD", "CHANGE_ME___SET_ME")
 
 # Swap to SSO later: replace APP_PASSWORD check with OAuth/SAML verify.
 # SSO swap point: add verify_sso_token() here and call it in streamlit_app.
-# In SiS (Streamlit in Snowflake) auth uses st.user, so APP_PASSWORD is local-only.
+# In SiS (Streamlit in Snowflake) the viewer comes from st.user and the connection from
+# st.connection("snowflake"), so APP_PASSWORD and the SNOWFLAKE_* keys are local-only.
 
 EMBED_MODEL = "snowflake-arctic-embed-m-v1.5"
 # Only these models allowed. Stops SQL inject via model name.
 ALLOWED_EMBED_MODELS = ["snowflake-arctic-embed-m-v1.5"]
-# LLM swap 2026: primary mistral-large3 (256K context), cheap draft llama3.1-8b.
-# Old mistral-large2 is legacy (EOL Oct 14 2026). Not allowed for new calls.
+# LLM pick, checked 2026-10-01 on the regional availability doc:
+# - Primary claude-sonnet-5: GA (generally available), 1M token context.
+#   Needs cross-region inference (CORTEX_ENABLED_CROSS_REGION = ANY_REGION or AWS_US).
+# - Draft + fallback llama3.1-8b: GA, cheap, native in some regions (e.g. AWS US West 2).
+# - mistral-large3 is public preview there ("not suitable for production"). Not used.
+# - Old mistral-large2 is legacy since Aug 12 2026, EOL "no sooner than Oct 14 2026". Not allowed.
 # Docs: https://docs.snowflake.com/en/user-guide/snowflake-cortex/aisql-regional-availability
-PRIMARY_MODEL = "mistral-large3"
+# Docs: https://docs.snowflake.com/en/release-notes/bcr-bundles/un-bundled/bcr-august-model-deprecations
+PRIMARY_MODEL = "claude-sonnet-5"
 DRAFT_MODEL = "llama3.1-8b"
 FALLBACK_MODEL = "llama3.1-8b"
-PRIMARY_MODEL_VERSION = "v3-2026-256K"
-FALLBACK_MODEL_VERSION = "llama3.1-8b-2026-draft"
-# Only live models. Old mistral-large2 kept as deprecated const for old rows.
-DEPRECATED_LLM_MODELS = ["mistral-large2"]
-ALLOWED_LLM_MODELS = ["mistral-large3", "llama3.1-8b"]
+# Audit label. Cortex puts the version in the model name, so we log the name.
+# No made-up version tag.
+PRIMARY_MODEL_VERSION = PRIMARY_MODEL
+FALLBACK_MODEL_VERSION = DRAFT_MODEL
+# Models this app no longer calls (old audit rows may name them):
+# mistral-large2 = legacy at Snowflake; mistral-large3 = preview, dropped by this app.
+DEPRECATED_LLM_MODELS = ["mistral-large2", "mistral-large3"]
+ALLOWED_LLM_MODELS = ["claude-sonnet-5", "llama3.1-8b"]
 # Single source for top K. Other files import from here. Do not copy.
 TOP_K = 3
 # Max tx rows pulled for evidence. Single source, no hard 5 in app.
 EVIDENCE_TX_LIMIT = 5
 # Rate cap per hour per user. Matches RATE_LIMIT table.
 RATE_LIMIT_PER_HOUR = 50
-# Local demo can approve without officer role if TRUE. Prod must be FALSE.
+# Local single-user demo only: approve without the connector-login officer role if TRUE.
+# Default FALSE. Ignored in SiS mode (SiS always needs APP_OFFICERS). Prod must be FALSE.
 ALLOW_LOCAL_APPROVE = _get_secret("ALLOW_LOCAL_APPROVE", "FALSE").upper() == "TRUE"
+# Opt-in: use Cortex Search Service (hybrid search = vector + keyword + rerank) for law clauses.
+# Default FALSE = old AI_EMBED cosine search. Needs sql/04_cortex_search.sql run first.
+# Any error falls back to cosine search. Docs:
+# https://docs.snowflake.com/en/user-guide/snowflake-cortex/cortex-search/query-cortex-search-service
+USE_CORTEX_SEARCH = _get_secret("USE_CORTEX_SEARCH", "FALSE").upper() == "TRUE"
+CORTEX_SEARCH_SERVICE = "POLICY_SEARCH"
+# Demo mode: fake sample data (backend/demo.py), no Snowflake, no AI call, no secrets.
+# On if DEMO_MODE=TRUE, or when the app runs in a web browser (stlite / Pyodide,
+# sys.platform == "emscripten"), which is how the public GitHub Pages demo runs.
+# Never used inside SiS (Streamlit in Snowflake): hybrid_agent.demo_on() checks that.
+DEMO_MODE = (_get_secret("DEMO_MODE", "FALSE").upper() == "TRUE") or sys.platform == "emscripten"
 
 
 def use_key_pair() -> bool:
@@ -96,8 +118,8 @@ def is_app_password_ok() -> tuple:
 def validate_secrets(require_app_password: bool = True) -> None:
     """Fail fast at startup if secrets missing. Simple English."""
     # Call once at app start. Gives clear error, not silent fail later.
+    # Local mode only. SiS mode skips this call (no keys needed, see backend/runtime.py).
     # require_app_password True for local mode: raise if weak.
-    # SiS mode passes False because SiS uses st.user, not APP_PASSWORD.
     missing = []
     if not SNOWFLAKE_ACCOUNT:
         missing.append("SNOWFLAKE_ACCOUNT")

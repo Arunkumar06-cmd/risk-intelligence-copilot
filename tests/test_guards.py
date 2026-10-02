@@ -59,7 +59,9 @@ def test_classify_sar():
 
 
 def test_classify_policy():
-    assert classify_intent("what policy rule for SAR") == "sar_draft" or classify_intent("what policy rule") == "policy_lookup"
+    # SAR words win over policy words; policy words alone give policy_lookup.
+    assert classify_intent("what policy rule for SAR") == "sar_draft"
+    assert classify_intent("what policy rule") == "policy_lookup"
 
 
 def test_classify_tx():

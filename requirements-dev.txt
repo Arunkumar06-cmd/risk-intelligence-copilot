@@ -1,0 +1,4 @@
+# Dev + CI only (tests and lint). Not installed by the app or SiS.
+# Install: pip install -r requirements.txt -r requirements-dev.txt
+pytest==9.1.1
+ruff==0.16.9
