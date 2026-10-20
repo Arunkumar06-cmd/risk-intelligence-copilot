@@ -2,7 +2,7 @@
 # Test + lint tools live in requirements-dev.txt, so they never ship to the app.
 # Docs: https://docs.snowflake.com/en/developer-guide/python-connector/python-connector-install
 snowflake-connector-python==4.7.5
-streamlit==1.64.0
+streamlit==1.66.0
 cryptography==50.0.2
 pandas==3.0.6
 # Optional Cortex Search client (only used when USE_CORTEX_SEARCH=TRUE). Apache-2.0.
