@@ -6,4 +6,4 @@ streamlit==1.64.0
 cryptography==50.0.2
 pandas==3.0.6
 # Optional Cortex Search client (only used when USE_CORTEX_SEARCH=TRUE). Apache-2.0.
-snowflake-core==1.13.2
+snowflake-core==1.14.0
